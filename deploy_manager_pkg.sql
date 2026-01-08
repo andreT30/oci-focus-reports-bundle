@@ -634,15 +634,24 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
 
     ------------------------------------------------------------------------
     -- 4) CHATBOT_GLOSSARY_KEYWORDS
+    --    For rules with DESCRIPTION = 'workload name target filter' we do
+    --    not export any keywords (environment-specific), so target keywords
+    --    for those rules are not touched.
     ------------------------------------------------------------------------
     DBMS_LOB.APPEND(l_out, '/* CHATBOT_GLOSSARY_KEYWORDS */' || CHR(10) || CHR(10));
 
     FOR r IN (
-      SELECT RULE_ID,
-             ORD,
-             KEYWORD
-        FROM CHATBOT_GLOSSARY_KEYWORDS
-       ORDER BY RULE_ID, ORD
+      SELECT k.RULE_ID,
+             k.ORD,
+             k.KEYWORD
+        FROM CHATBOT_GLOSSARY_KEYWORDS k
+        WHERE NOT EXISTS (
+          SELECT 1
+            FROM CHATBOT_GLOSSARY_RULES gr
+           WHERE gr.ID = k.RULE_ID
+             AND LOWER(gr.DESCRIPTION) = 'workload name target filter'
+        )
+       ORDER BY k.RULE_ID, k.ORD
     ) LOOP
       DBMS_LOB.APPEND(
         l_out,
@@ -730,7 +739,9 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         p_table_name LIKE 'SDW$ERR$_%'
       OR p_table_name LIKE 'BKP\_%' ESCAPE '\'
       OR p_table_name LIKE 'BIN$%'       -- recycle bin safety
-      OR p_table_name LIKE 'APEX$_%';
+      OR p_table_name LIKE 'APEX$_%'
+      OR p_table_name LIKE 'COPY$%'         -- Oracle auto COPY$ tables
+      OR p_table_name LIKE 'VALIDATE$%';    -- Oracle auto VALIDATE$ tables
   END;
 
   FUNCTION wrap_add_column_if_missing(
