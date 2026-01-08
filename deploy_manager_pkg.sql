@@ -292,7 +292,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
             '    SELECT enabled' || CHR(10) ||
             '      INTO l_target_enabled' || CHR(10) ||
             '      FROM user_scheduler_jobs' || CHR(10) ||
-            '     WHERE job_name = ''' || j.job_name || '''' || CHR(10) ||
+            '     WHERE job_name = ''' || j.job_name || ''';' || CHR(10) ||
             '  EXCEPTION' || CHR(10) ||
             '    WHEN NO_DATA_FOUND THEN' || CHR(10) ||
             '      l_target_enabled := NULL;' || CHR(10) ||
