@@ -1407,7 +1407,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
     l_tmp := export_group('01_tables');      APEX_ZIP.ADD_FILE(l_zip,'db/ddl/01_tables.sql',      clob_to_blob(l_tmp));
     l_tmp := export_group('01a_table_alters');APEX_ZIP.ADD_FILE(l_zip,'db/ddl/01a_table_alters.sql', clob_to_blob(l_tmp));
     l_tmp := export_group('02_sequences');   APEX_ZIP.ADD_FILE(l_zip,'db/ddl/02_sequences.sql',   clob_to_blob(l_tmp));
-    l_tmp := export_group('10_indexes');     APEX_ZIP.ADD_FILE(l_zip,'db/ddl/10_indexes.sql',     clob_to_blob(l_tmp));
     l_tmp := export_group('03_constraints'); APEX_ZIP.ADD_FILE(l_zip,'db/ddl/03_constraints.sql', clob_to_blob(l_tmp));
     l_tmp := export_group('04_pkg_specs');   APEX_ZIP.ADD_FILE(l_zip,'db/ddl/04_pkg_specs.sql',   clob_to_blob(l_tmp));
     l_tmp := export_contexts;                APEX_ZIP.ADD_FILE(l_zip,'db/ddl/05_contexts.sql',    clob_to_blob(l_tmp));
@@ -1415,6 +1414,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
     l_tmp := export_group('07_procs_funcs'); APEX_ZIP.ADD_FILE(l_zip,'db/ddl/07_procs_funcs.sql', clob_to_blob(l_tmp));
     l_tmp := export_group('08_mviews');      APEX_ZIP.ADD_FILE(l_zip,'db/ddl/08_mviews.sql',      clob_to_blob(l_tmp));
     l_tmp := export_group('09_triggers');    APEX_ZIP.ADD_FILE(l_zip,'db/ddl/09_triggers.sql',    clob_to_blob(l_tmp));
+    l_tmp := export_group('10_indexes');     APEX_ZIP.ADD_FILE(l_zip,'db/ddl/10_indexes.sql',     clob_to_blob(l_tmp));
 
     -- Migrations
     l_tmp := build_migrations_manifest;
@@ -1868,6 +1868,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/01_tables.sql',        p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/01a_table_alters.sql', p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/02_sequences.sql',     p_dry_run => p_dry_run);
+    run_script_from_zip(p_run_id, l_zip, 'db/ddl/10_indexes.sql',  p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/03_constraints.sql',   p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/04_pkg_specs.sql',     p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/05_contexts.sql',      p_dry_run => p_dry_run);
@@ -1881,7 +1882,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
       p_dry_run   => p_dry_run
     );
 
-    run_script_from_zip(p_run_id, l_zip, 'db/ddl/10_indexes.sql',  p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/08_mviews.sql',   p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/09_triggers.sql', p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/90_jobs.sql',     p_dry_run => p_dry_run);
