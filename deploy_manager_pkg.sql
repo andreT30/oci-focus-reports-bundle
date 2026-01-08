@@ -293,7 +293,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
             '      INTO l_target_enabled' || CHR(10) ||
             '      FROM user_scheduler_jobs' || CHR(10) ||
             '     WHERE job_name = ''' || j.job_name || '''' || CHR(10) ||
-            '       AND owner     = SYS_CONTEXT(''USERENV'',''CURRENT_SCHEMA'');' || CHR(10) ||
             '  EXCEPTION' || CHR(10) ||
             '    WHEN NO_DATA_FOUND THEN' || CHR(10) ||
             '      l_target_enabled := NULL;' || CHR(10) ||
