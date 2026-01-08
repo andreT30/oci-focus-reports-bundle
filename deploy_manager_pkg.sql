@@ -93,6 +93,24 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
       NULL;
   END;
 
+  --- Source data helpers
+  FUNCTION table_exists(p_table_name IN VARCHAR2) RETURN BOOLEAN IS
+    l_cnt NUMBER;
+  BEGIN
+    SELECT COUNT(*)
+      INTO l_cnt
+      FROM user_tables
+    WHERE table_name = UPPER(p_table_name);
+    RETURN l_cnt > 0;
+  END;
+
+  PROCEDURE append_line(p_out IN OUT NOCOPY CLOB, p_line IN VARCHAR2) IS
+  BEGIN
+    IF p_out IS NULL THEN
+      DBMS_LOB.CREATETEMPORARY(p_out, TRUE);
+    END IF;
+    DBMS_LOB.APPEND(p_out, p_line || CHR(10));
+  END;
 
   ------- Autonomous start
   FUNCTION run_start(p_action IN VARCHAR2, p_bundle_id IN NUMBER DEFAULT NULL) RETURN NUMBER IS
@@ -331,8 +349,24 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
   -- APP_CONFIG seed export (selected keys -> MERGE statements)
   ------------------------------------------------------------------------------
   FUNCTION export_app_config RETURN CLOB IS
-    l_out  CLOB := EMPTY_CLOB();
-    l_expr CLOB;
+    l_out    CLOB := EMPTY_CLOB();
+
+    -- local row vars
+    l_key    VARCHAR2(4000);
+    l_val    CLOB;
+
+    l_expr   CLOB;
+
+    FUNCTION table_exists(p_table_name IN VARCHAR2) RETURN BOOLEAN IS
+      l_cnt NUMBER;
+    BEGIN
+      SELECT COUNT(*)
+        INTO l_cnt
+        FROM user_tables
+      WHERE table_name = UPPER(p_table_name);
+      RETURN l_cnt > 0;
+    END;
+
   BEGIN
     DBMS_LOB.CREATETEMPORARY(l_out, TRUE);
 
@@ -343,86 +377,115 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         CHR(10)
     );
 
-    FOR r IN (
-      SELECT
-        config_key,
-        TO_CLOB(config_value) AS config_value
-      FROM app_config
-      WHERE config_key IN (
-        'ADB_COMPUTE_COUNT_DOWN',
-        'ADB_COMPUTE_COUNT_UP',
-        'AVAILABILITY_DAYS_BACK',
-        'AVAILABILITY_METRICS_TABLE',
-        'AVAILABILITY_METRIC_GROUPS_JSON',
-        'AVAILABILITY_QUERY_SUFFIX',
-        'AVAILABILITY_RESOLUTION',
-        'COMPARTMENTS_TABLE',
-        'CREDENTIAL_NAME',
-        'CSV_FIELD_LIST',
-        'DAYS_BACK',
-        'EXA_MAINTENANCE_METRICS_TABLE',
-        'FILE_SUFFIX',
-        'FILTER_BY_CREATED_SINCE',
-        'KEY_COLUMN',
-        'POST_PROCS',
-        'POST_SUBS_PROC_1',
-        'POST_SUBS_PROC_2',
-        'PREFIX_BASE',
-        'PREFIX_FILE',
-        'RESOURCES_TABLE',
-        'RESOURCE_OKE_RELATIONSHIPS_PROC',
-        'RESOURCE_RELATIONSHIPS_PROC',
-        'STAGE_TABLE',
-        'SUBSCRIPTIONS_TARGET_TABLE',
-        'SUBSCRIPTION_COMMIT_TARGET_TABLE',
-        'TARGET_TABLE',
-        'USE_DYNAMIC_PREFIX'
-      )
-      ORDER BY config_key
-    ) LOOP
-      l_expr := NULL;
-
-      IF r.config_value IS NULL THEN
-        l_expr := 'CAST(NULL AS VARCHAR2(32767))';
-      ELSE
-        -- Build a `'...'||'...'` expression to avoid 4k literal limits
-        DECLARE
-          l_pos   PLS_INTEGER := 1;
-          l_chunk VARCHAR2(2000);
-        BEGIN
-          WHILE l_pos <= DBMS_LOB.getlength(r.config_value) LOOP
-            l_chunk := DBMS_LOB.SUBSTR(r.config_value, 2000, l_pos);
-            l_chunk := REPLACE(l_chunk, '''', '''''');
-            IF l_expr IS NULL THEN
-              l_expr := '''' || l_chunk || '''';
-            ELSE
-              l_expr := l_expr || '||''' || l_chunk || '''';
-            END IF;
-            l_pos := l_pos + 2000;
-          END LOOP;
-        END;
-      END IF;
-
-      DBMS_LOB.APPEND(
-        l_out,
-          'MERGE INTO oci_focus_reports.app_config c' || CHR(10) ||
-          'USING (SELECT ''' ||
-              REPLACE(r.config_key, '''', '''''') || ''' config_key, ' ||
-              NVL(l_expr, 'CAST(NULL AS VARCHAR2(32767))') ||
-              ' config_value FROM dual) s' || CHR(10) ||
-          'ON (c.config_key = s.config_key)' || CHR(10) ||
-          'WHEN MATCHED THEN UPDATE SET c.config_value = s.config_value, c.updated_at = SYSDATE' || CHR(10) ||
-          'WHEN NOT MATCHED THEN INSERT (config_key, config_value, updated_at)' || CHR(10) ||
-          'VALUES (s.config_key, s.config_value, SYSDATE);' || CHR(10) || CHR(10)
-      );
-    END LOOP;
-
-    IF DBMS_LOB.getlength(l_out) = 0 THEN
-      DBMS_LOB.APPEND(
-        l_out,
-        '/* No APP_CONFIG rows exported for configured keys. */' || CHR(10)
-      );
+    IF NOT table_exists('APP_CONFIG') THEN
+      DBMS_LOB.APPEND(l_out, '/* APP_CONFIG table not found in this schema; skipping export. */' || CHR(10));
+      RETURN l_out;
     END IF;
+
+    --------------------------------------------------------------------------
+    -- Use DBMS_SQL to avoid compile-time dependency on APP_CONFIG
+    --------------------------------------------------------------------------
+    DECLARE
+      c   INTEGER;
+      rc  INTEGER;
+
+      l_key_v  VARCHAR2(4000);
+      l_val_c  CLOB;
+    BEGIN
+      c := DBMS_SQL.OPEN_CURSOR;
+
+      DBMS_SQL.PARSE(
+        c,
+        'SELECT config_key, TO_CLOB(config_value) AS config_value '||
+        '  FROM app_config '||
+        ' WHERE config_key IN ('||
+        '''ADB_COMPUTE_COUNT_DOWN'','||
+        '''ADB_COMPUTE_COUNT_UP'','||
+        '''AVAILABILITY_DAYS_BACK'','||
+        '''AVAILABILITY_METRICS_TABLE'','||
+        '''AVAILABILITY_METRIC_GROUPS_JSON'','||
+        '''AVAILABILITY_QUERY_SUFFIX'','||
+        '''AVAILABILITY_RESOLUTION'','||
+        '''COMPARTMENTS_TABLE'','||
+        '''CREDENTIAL_NAME'','||
+        '''CSV_FIELD_LIST'','||
+        '''DAYS_BACK'','||
+        '''EXA_MAINTENANCE_METRICS_TABLE'','||
+        '''FILE_SUFFIX'','||
+        '''FILTER_BY_CREATED_SINCE'','||
+        '''KEY_COLUMN'','||
+        '''POST_PROCS'','||
+        '''POST_SUBS_PROC_1'','||
+        '''POST_SUBS_PROC_2'','||
+        '''PREFIX_BASE'','||
+        '''PREFIX_FILE'','||
+        '''RESOURCES_TABLE'','||
+        '''RESOURCE_OKE_RELATIONSHIPS_PROC'','||
+        '''RESOURCE_RELATIONSHIPS_PROC'','||
+        '''STAGE_TABLE'','||
+        '''SUBSCRIPTIONS_TARGET_TABLE'','||
+        '''SUBSCRIPTION_COMMIT_TARGET_TABLE'','||
+        '''TARGET_TABLE'','||
+        '''USE_DYNAMIC_PREFIX'''||
+        ') '||
+        ' ORDER BY config_key',
+        DBMS_SQL.NATIVE
+      );
+
+      DBMS_SQL.DEFINE_COLUMN(c, 1, l_key_v, 4000);
+      DBMS_SQL.DEFINE_COLUMN(c, 2, l_val_c);
+
+      rc := DBMS_SQL.EXECUTE(c);
+
+      WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
+        DBMS_SQL.COLUMN_VALUE(c, 1, l_key_v);
+        DBMS_SQL.COLUMN_VALUE(c, 2, l_val_c);
+
+        l_expr := NULL;
+
+        IF l_val_c IS NULL THEN
+          l_expr := 'CAST(NULL AS VARCHAR2(32767))';
+        ELSE
+          -- Build a `'...'||'...'` expression to avoid 4k literal limits
+          DECLARE
+            l_pos   PLS_INTEGER := 1;
+            l_chunk VARCHAR2(2000);
+          BEGIN
+            WHILE l_pos <= DBMS_LOB.getlength(l_val_c) LOOP
+              l_chunk := DBMS_LOB.SUBSTR(l_val_c, 2000, l_pos);
+              l_chunk := REPLACE(l_chunk, '''', '''''');
+              IF l_expr IS NULL THEN
+                l_expr := '''' || l_chunk || '''';
+              ELSE
+                l_expr := l_expr || '||''' || l_chunk || '''';
+              END IF;
+              l_pos := l_pos + 2000;
+            END LOOP;
+          END;
+        END IF;
+
+        DBMS_LOB.APPEND(
+          l_out,
+            'MERGE INTO oci_focus_reports.app_config c' || CHR(10) ||
+            'USING (SELECT ''' ||
+                REPLACE(l_key_v, '''', '''''') || ''' config_key, ' ||
+                NVL(l_expr, 'CAST(NULL AS VARCHAR2(32767))') ||
+                ' config_value FROM dual) s' || CHR(10) ||
+            'ON (c.config_key = s.config_key)' || CHR(10) ||
+            'WHEN MATCHED THEN UPDATE SET c.config_value = s.config_value, c.updated_at = SYSDATE' || CHR(10) ||
+            'WHEN NOT MATCHED THEN INSERT (config_key, config_value, updated_at)' || CHR(10) ||
+            'VALUES (s.config_key, s.config_value, SYSDATE);' || CHR(10) || CHR(10)
+        );
+      END LOOP;
+
+      DBMS_SQL.CLOSE_CURSOR(c);
+    EXCEPTION
+      WHEN OTHERS THEN
+        IF DBMS_SQL.IS_OPEN(c) THEN
+          DBMS_SQL.CLOSE_CURSOR(c);
+        END IF;
+        DBMS_LOB.APPEND(l_out, '/* WARN: export_app_config failed: '||SQLERRM||' */' || CHR(10));
+    END;
 
     RETURN l_out;
   END;
@@ -434,7 +497,9 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
     l_out     CLOB := EMPTY_CLOB();
     l_schema  VARCHAR2(128);
 
-    -- Simple helpers for quoting
+    --------------------------------------------------------------------------
+    -- Quoting helpers (same semantics as your current ones)
+    --------------------------------------------------------------------------
     FUNCTION q(v VARCHAR2) RETURN VARCHAR2 IS
     BEGIN
       IF v IS NULL THEN
@@ -450,7 +515,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
       IF c IS NULL THEN
         RETURN 'NULL';
       ELSE
-        -- truncate to 32767 chars; increase if you need larger exports
         l_v := DBMS_LOB.SUBSTR(c, 32767, 1);
         RETURN 'TO_CLOB(q''~' || REPLACE(l_v, '~', '~~') || '~'')';
       END IF;
@@ -462,216 +526,403 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         RETURN 'NULL';
       ELSE
         RETURN 'TO_TIMESTAMP(''' ||
-               TO_CHAR(p_ts, 'YYYY-MM-DD HH24:MI:SS.FF6') ||
-               ''',''YYYY-MM-DD HH24:MI:SS.FF6'')';
+              TO_CHAR(p_ts, 'YYYY-MM-DD HH24:MI:SS.FF6') ||
+              ''',''YYYY-MM-DD HH24:MI:SS.FF6'')';
       END IF;
+    END;
+
+    FUNCTION table_exists(p_table_name IN VARCHAR2) RETURN BOOLEAN IS
+      l_cnt NUMBER;
+    BEGIN
+      SELECT COUNT(*)
+        INTO l_cnt
+        FROM user_tables
+      WHERE table_name = UPPER(p_table_name);
+      RETURN l_cnt > 0;
+    END;
+
+    PROCEDURE append(p IN VARCHAR2) IS
+    BEGIN
+      DBMS_LOB.APPEND(l_out, p);
+    END;
+
+    PROCEDURE append_line(p IN VARCHAR2) IS
+    BEGIN
+      DBMS_LOB.APPEND(l_out, p || CHR(10));
     END;
 
   BEGIN
     DBMS_LOB.CREATETEMPORARY(l_out, TRUE);
     SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') INTO l_schema FROM dual;
 
-    DBMS_LOB.APPEND(
-      l_out,
-        '/* Seed data for CHATBOT_* tables exported from source environment. */' || CHR(10) ||
-        '/* Tables: CHATBOT_PARAMETERS, CHATBOT_PARAMETER_COMPONENT, CHATBOT_GLOSSARY_RULES, CHATBOT_GLOSSARY_KEYWORDS */' || CHR(10) ||
-        CHR(10)
-    );
+    append_line('/* Seed data for CHATBOT_* tables exported from source environment. */');
+    append_line('/* Tables: CHATBOT_PARAMETERS, CHATBOT_PARAMETER_COMPONENT, CHATBOT_GLOSSARY_RULES, CHATBOT_GLOSSARY_KEYWORDS */');
+    append_line('');
 
-    ------------------------------------------------------------------------
+    --------------------------------------------------------------------------
     -- 1) CHATBOT_PARAMETERS
-    ------------------------------------------------------------------------
-    DBMS_LOB.APPEND(l_out, '/* CHATBOT_PARAMETERS */' || CHR(10) || CHR(10));
+    --------------------------------------------------------------------------
+    append_line('/* CHATBOT_PARAMETERS */');
+    append_line('');
 
-    FOR r IN (
-      SELECT ID,
-             COMPONENT_TYPE,
-             CONTENT,
-             ACTIVE,
-             DATASET,
-             CREATED_AT,
-             ENVIRONMENT
-        FROM CHATBOT_PARAMETERS
-       ORDER BY ID
-    ) LOOP
-      DBMS_LOB.APPEND(
-        l_out,
-          'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETERS t' || CHR(10) ||
-          'USING (' || CHR(10) ||
-          '  SELECT ' || r.ID || ' AS ID,' || CHR(10) ||
-          '         ' || q(r.COMPONENT_TYPE) || ' AS COMPONENT_TYPE,' || CHR(10) ||
-          '         ' || q_clob(r.CONTENT)   || ' AS CONTENT,' || CHR(10) ||
-          '         ' || q(r.ACTIVE)         || ' AS ACTIVE,' || CHR(10) ||
-          '         ' || q(r.DATASET)        || ' AS DATASET,' || CHR(10) ||
-          '         ' || q_ts(r.CREATED_AT)  || ' AS CREATED_AT,' || CHR(10) ||
-          '         ' || q(r.ENVIRONMENT)    || ' AS ENVIRONMENT' || CHR(10) ||
-          '  FROM dual' || CHR(10) ||
-          ') s' || CHR(10) ||
-          'ON (t.ID = s.ID)' || CHR(10) ||
-          'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
-          '  t.COMPONENT_TYPE = s.COMPONENT_TYPE,' || CHR(10) ||
-          '  t.CONTENT        = s.CONTENT,' || CHR(10) ||
-          '  t.ACTIVE         = s.ACTIVE,' || CHR(10) ||
-          '  t.DATASET        = s.DATASET,' || CHR(10) ||
-          '  t.CREATED_AT     = s.CREATED_AT,' || CHR(10) ||
-          '  t.ENVIRONMENT    = s.ENVIRONMENT' || CHR(10) ||
-          'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
-          '  ID, COMPONENT_TYPE, CONTENT, ACTIVE, DATASET, CREATED_AT, ENVIRONMENT' || CHR(10) ||
-          ') VALUES (' || CHR(10) ||
-          '  s.ID, s.COMPONENT_TYPE, s.CONTENT, s.ACTIVE, s.DATASET, s.CREATED_AT, s.ENVIRONMENT' || CHR(10) ||
-          ');' || CHR(10) || CHR(10)
-      );
-    END LOOP;
+    IF NOT table_exists('CHATBOT_PARAMETERS') THEN
+      append_line('/* CHATBOT_PARAMETERS not found; skipping. */');
+      append_line('');
+    ELSE
+      DECLARE
+        c     INTEGER;
+        rc    INTEGER;
 
-    ------------------------------------------------------------------------
-    -- 2) CHATBOT_PARAMETER_COMPONENT  (note: table name is singular)
-    ------------------------------------------------------------------------
-    DBMS_LOB.APPEND(l_out, '/* CHATBOT_PARAMETER_COMPONENT */' || CHR(10) || CHR(10));
+        v_id  NUMBER;
+        v_ct  VARCHAR2(4000);
+        v_co  CLOB;
+        v_ac  VARCHAR2(10);
+        v_ds  VARCHAR2(4000);
+        v_ca  TIMESTAMP;
+        v_en  VARCHAR2(4000);
+      BEGIN
+        c := DBMS_SQL.OPEN_CURSOR;
+        DBMS_SQL.PARSE(
+          c,
+          'SELECT id, component_type, content, active, dataset, created_at, environment '||
+          '  FROM chatbot_parameters '||
+          ' ORDER BY id',
+          DBMS_SQL.NATIVE
+        );
 
-    FOR r IN (
-      SELECT ID,
-             COMPONENT_TYPE
-        FROM CHATBOT_PARAMETER_COMPONENT
-       ORDER BY ID
-    ) LOOP
-      DBMS_LOB.APPEND(
-        l_out,
-          'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETER_COMPONENT t' || CHR(10) ||
-          'USING (' || CHR(10) ||
-          '  SELECT ' || r.ID                   || ' AS ID,' || CHR(10) ||
-          '         ' || q(r.COMPONENT_TYPE)    || ' AS COMPONENT_TYPE' || CHR(10) ||
-          '  FROM dual' || CHR(10) ||
-          ') s' || CHR(10) ||
-          'ON (t.ID = s.ID)' || CHR(10) ||
-          'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
-          '  t.COMPONENT_TYPE = s.COMPONENT_TYPE' || CHR(10) ||
-          'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
-          '  ID, COMPONENT_TYPE' || CHR(10) ||
-          ') VALUES (' || CHR(10) ||
-          '  s.ID, s.COMPONENT_TYPE' || CHR(10) ||
-          ');' || CHR(10) || CHR(10)
-      );
-    END LOOP;
+        DBMS_SQL.DEFINE_COLUMN(c, 1, v_id);
+        DBMS_SQL.DEFINE_COLUMN(c, 2, v_ct, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 3, v_co); -- CLOB
+        DBMS_SQL.DEFINE_COLUMN(c, 4, v_ac, 10);
+        DBMS_SQL.DEFINE_COLUMN(c, 5, v_ds, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 6, v_ca);
+        DBMS_SQL.DEFINE_COLUMN(c, 7, v_en, 4000);
 
-    ------------------------------------------------------------------------
+        rc := DBMS_SQL.EXECUTE(c);
+
+        WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
+          DBMS_SQL.COLUMN_VALUE(c, 1, v_id);
+          DBMS_SQL.COLUMN_VALUE(c, 2, v_ct);
+          DBMS_SQL.COLUMN_VALUE(c, 3, v_co);
+          DBMS_SQL.COLUMN_VALUE(c, 4, v_ac);
+          DBMS_SQL.COLUMN_VALUE(c, 5, v_ds);
+          DBMS_SQL.COLUMN_VALUE(c, 6, v_ca);
+          DBMS_SQL.COLUMN_VALUE(c, 7, v_en);
+
+          append(
+            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETERS t' || CHR(10) ||
+            'USING (' || CHR(10) ||
+            '  SELECT ' || TO_CHAR(v_id) || ' AS ID,' || CHR(10) ||
+            '         ' || q(v_ct)       || ' AS COMPONENT_TYPE,' || CHR(10) ||
+            '         ' || q_clob(v_co)  || ' AS CONTENT,' || CHR(10) ||
+            '         ' || q(v_ac)       || ' AS ACTIVE,' || CHR(10) ||
+            '         ' || q(v_ds)       || ' AS DATASET,' || CHR(10) ||
+            '         ' || q_ts(v_ca)    || ' AS CREATED_AT,' || CHR(10) ||
+            '         ' || q(v_en)       || ' AS ENVIRONMENT' || CHR(10) ||
+            '  FROM dual' || CHR(10) ||
+            ') s' || CHR(10) ||
+            'ON (t.ID = s.ID)' || CHR(10) ||
+            'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
+            '  t.COMPONENT_TYPE = s.COMPONENT_TYPE,' || CHR(10) ||
+            '  t.CONTENT        = s.CONTENT,' || CHR(10) ||
+            '  t.ACTIVE         = s.ACTIVE,' || CHR(10) ||
+            '  t.DATASET        = s.DATASET,' || CHR(10) ||
+            '  t.CREATED_AT     = s.CREATED_AT,' || CHR(10) ||
+            '  t.ENVIRONMENT    = s.ENVIRONMENT' || CHR(10) ||
+            'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
+            '  ID, COMPONENT_TYPE, CONTENT, ACTIVE, DATASET, CREATED_AT, ENVIRONMENT' || CHR(10) ||
+            ') VALUES (' || CHR(10) ||
+            '  s.ID, s.COMPONENT_TYPE, s.CONTENT, s.ACTIVE, s.DATASET, s.CREATED_AT, s.ENVIRONMENT' || CHR(10) ||
+            ');' || CHR(10) || CHR(10)
+          );
+        END LOOP;
+
+        DBMS_SQL.CLOSE_CURSOR(c);
+      EXCEPTION
+        WHEN OTHERS THEN
+          IF DBMS_SQL.IS_OPEN(c) THEN DBMS_SQL.CLOSE_CURSOR(c); END IF;
+          append_line('/* WARN: export CHATBOT_PARAMETERS failed: '||SQLERRM||' */');
+          append_line('');
+      END;
+    END IF;
+
+    --------------------------------------------------------------------------
+    -- 2) CHATBOT_PARAMETER_COMPONENT
+    --------------------------------------------------------------------------
+    append_line('/* CHATBOT_PARAMETER_COMPONENT */');
+    append_line('');
+
+    IF NOT table_exists('CHATBOT_PARAMETER_COMPONENT') THEN
+      append_line('/* CHATBOT_PARAMETER_COMPONENT not found; skipping. */');
+      append_line('');
+    ELSE
+      DECLARE
+        c     INTEGER;
+        rc    INTEGER;
+
+        v_id  NUMBER;
+        v_ct  VARCHAR2(4000);
+      BEGIN
+        c := DBMS_SQL.OPEN_CURSOR;
+        DBMS_SQL.PARSE(
+          c,
+          'SELECT id, component_type FROM chatbot_parameter_component ORDER BY id',
+          DBMS_SQL.NATIVE
+        );
+
+        DBMS_SQL.DEFINE_COLUMN(c, 1, v_id);
+        DBMS_SQL.DEFINE_COLUMN(c, 2, v_ct, 4000);
+
+        rc := DBMS_SQL.EXECUTE(c);
+
+        WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
+          DBMS_SQL.COLUMN_VALUE(c, 1, v_id);
+          DBMS_SQL.COLUMN_VALUE(c, 2, v_ct);
+
+          append(
+            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETER_COMPONENT t' || CHR(10) ||
+            'USING (' || CHR(10) ||
+            '  SELECT ' || TO_CHAR(v_id) || ' AS ID,' || CHR(10) ||
+            '         ' || q(v_ct)       || ' AS COMPONENT_TYPE' || CHR(10) ||
+            '  FROM dual' || CHR(10) ||
+            ') s' || CHR(10) ||
+            'ON (t.ID = s.ID)' || CHR(10) ||
+            'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
+            '  t.COMPONENT_TYPE = s.COMPONENT_TYPE' || CHR(10) ||
+            'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
+            '  ID, COMPONENT_TYPE' || CHR(10) ||
+            ') VALUES (' || CHR(10) ||
+            '  s.ID, s.COMPONENT_TYPE' || CHR(10) ||
+            ');' || CHR(10) || CHR(10)
+          );
+        END LOOP;
+
+        DBMS_SQL.CLOSE_CURSOR(c);
+      EXCEPTION
+        WHEN OTHERS THEN
+          IF DBMS_SQL.IS_OPEN(c) THEN DBMS_SQL.CLOSE_CURSOR(c); END IF;
+          append_line('/* WARN: export CHATBOT_PARAMETER_COMPONENT failed: '||SQLERRM||' */');
+          append_line('');
+      END;
+    END IF;
+
+    --------------------------------------------------------------------------
     -- 3) CHATBOT_GLOSSARY_RULES
-    ------------------------------------------------------------------------
-    DBMS_LOB.APPEND(l_out, '/* CHATBOT_GLOSSARY_RULES */' || CHR(10) || CHR(10));
+    --------------------------------------------------------------------------
+    append_line('/* CHATBOT_GLOSSARY_RULES */');
+    append_line('');
 
-    FOR r IN (
-      SELECT ID,
-             DATASET,
-             ENVIRONMENT,
-             ACTIVE,
-             MATCH_MODE,
-             ROLE,
-             PRIORITY,
-             DESCRIPTION,
-             TARGET_TABLE,
-             TARGET_COLUMN,
-             TARGET_ROLE,
-             TARGET_FILTER,
-             FILTER_RULE,
-             CREATED_AT,
-             CREATED_BY,
-             UPDATED_AT,
-             UPDATED_BY
-        FROM CHATBOT_GLOSSARY_RULES
-       ORDER BY ID
-    ) LOOP
-      DBMS_LOB.APPEND(
-        l_out,
-          'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_RULES t' || CHR(10) ||
-          'USING (' || CHR(10) ||
-          '  SELECT ' || r.ID                   || ' AS ID,' || CHR(10) ||
-          '         ' || q(r.DATASET)           || ' AS DATASET,' || CHR(10) ||
-          '         ' || q(r.ENVIRONMENT)       || ' AS ENVIRONMENT,' || CHR(10) ||
-          '         ' || q(r.ACTIVE)            || ' AS ACTIVE,' || CHR(10) ||
-          '         ' || q(r.MATCH_MODE)        || ' AS MATCH_MODE,' || CHR(10) ||
-          '         ' || q(r.ROLE)              || ' AS ROLE,' || CHR(10) ||
-          '         ' || NVL(TO_CHAR(r.PRIORITY),'NULL') || ' AS PRIORITY,' || CHR(10) ||
-          '         ' || q(r.DESCRIPTION)       || ' AS DESCRIPTION,' || CHR(10) ||
-          '         ' || q(r.TARGET_TABLE)      || ' AS TARGET_TABLE,' || CHR(10) ||
-          '         ' || q(r.TARGET_COLUMN)     || ' AS TARGET_COLUMN,' || CHR(10) ||
-          '         ' || q(r.TARGET_ROLE)       || ' AS TARGET_ROLE,' || CHR(10) ||
-          '         ' || q_clob(r.TARGET_FILTER)|| ' AS TARGET_FILTER,' || CHR(10) ||
-          '         ' || q_clob(r.FILTER_RULE)  || ' AS FILTER_RULE,' || CHR(10) ||
-          '         ' || q_ts(r.CREATED_AT)     || ' AS CREATED_AT,' || CHR(10) ||
-          '         ' || q(r.CREATED_BY)        || ' AS CREATED_BY,' || CHR(10) ||
-          '         ' || q_ts(r.UPDATED_AT)     || ' AS UPDATED_AT,' || CHR(10) ||
-          '         ' || q(r.UPDATED_BY)        || ' AS UPDATED_BY' || CHR(10) ||
-          '  FROM dual' || CHR(10) ||
-          ') s' || CHR(10) ||
-          'ON (t.ID = s.ID)' || CHR(10) ||
-          'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
-          '  t.DATASET      = s.DATASET,' || CHR(10) ||
-          '  t.ENVIRONMENT  = s.ENVIRONMENT,' || CHR(10) ||
-          '  t.ACTIVE       = s.ACTIVE,' || CHR(10) ||
-          '  t.MATCH_MODE   = s.MATCH_MODE,' || CHR(10) ||
-          '  t.ROLE         = s.ROLE,' || CHR(10) ||
-          '  t.PRIORITY     = s.PRIORITY,' || CHR(10) ||
-          '  t.DESCRIPTION  = s.DESCRIPTION,' || CHR(10) ||
-          '  t.TARGET_TABLE = s.TARGET_TABLE,' || CHR(10) ||
-          '  t.TARGET_COLUMN= s.TARGET_COLUMN,' || CHR(10) ||
-          '  t.TARGET_ROLE  = s.TARGET_ROLE,' || CHR(10) ||
-          '  t.TARGET_FILTER= s.TARGET_FILTER,' || CHR(10) ||
-          '  t.FILTER_RULE  = s.FILTER_RULE,' || CHR(10) ||
-          '  t.CREATED_AT   = s.CREATED_AT,' || CHR(10) ||
-          '  t.CREATED_BY   = s.CREATED_BY,' || CHR(10) ||
-          '  t.UPDATED_AT   = s.UPDATED_AT,' || CHR(10) ||
-          '  t.UPDATED_BY   = s.UPDATED_BY' || CHR(10) ||
-          'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
-          '  ID, DATASET, ENVIRONMENT, ACTIVE, MATCH_MODE, ROLE, PRIORITY, DESCRIPTION,' || CHR(10) ||
-          '  TARGET_TABLE, TARGET_COLUMN, TARGET_ROLE, TARGET_FILTER, FILTER_RULE,' || CHR(10) ||
-          '  CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY' || CHR(10) ||
-          ') VALUES (' || CHR(10) ||
-          '  s.ID, s.DATASET, s.ENVIRONMENT, s.ACTIVE, s.MATCH_MODE, s.ROLE, s.PRIORITY, s.DESCRIPTION,' || CHR(10) ||
-          '  s.TARGET_TABLE, s.TARGET_COLUMN, s.TARGET_ROLE, s.TARGET_FILTER, s.FILTER_RULE,' || CHR(10) ||
-          '  s.CREATED_AT, s.CREATED_BY, s.UPDATED_AT, s.UPDATED_BY' || CHR(10) ||
-          ');' || CHR(10) || CHR(10)
-      );
-    END LOOP;
+    IF NOT table_exists('CHATBOT_GLOSSARY_RULES') THEN
+      append_line('/* CHATBOT_GLOSSARY_RULES not found; skipping. */');
+      append_line('');
+    ELSE
+      DECLARE
+        c     INTEGER;
+        rc    INTEGER;
 
-    ------------------------------------------------------------------------
+        v_id        NUMBER;
+        v_dataset   VARCHAR2(4000);
+        v_env       VARCHAR2(4000);
+        v_active    VARCHAR2(10);
+        v_match     VARCHAR2(4000);
+        v_role      VARCHAR2(4000);
+        v_priority  NUMBER;
+        v_desc      VARCHAR2(4000);
+        v_ttable    VARCHAR2(4000);
+        v_tcol      VARCHAR2(4000);
+        v_trole     VARCHAR2(4000);
+        v_tfilter   CLOB;
+        v_frule     CLOB;
+        v_createdat TIMESTAMP;
+        v_createdby VARCHAR2(4000);
+        v_updatedat TIMESTAMP;
+        v_updatedby VARCHAR2(4000);
+      BEGIN
+        c := DBMS_SQL.OPEN_CURSOR;
+        DBMS_SQL.PARSE(
+          c,
+          'SELECT id, dataset, environment, active, match_mode, role, priority, description,'||
+          '       target_table, target_column, target_role, target_filter, filter_rule,'||
+          '       created_at, created_by, updated_at, updated_by '||
+          '  FROM chatbot_glossary_rules '||
+          ' ORDER BY id',
+          DBMS_SQL.NATIVE
+        );
+
+        DBMS_SQL.DEFINE_COLUMN(c,  1, v_id);
+        DBMS_SQL.DEFINE_COLUMN(c,  2, v_dataset, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c,  3, v_env, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c,  4, v_active, 10);
+        DBMS_SQL.DEFINE_COLUMN(c,  5, v_match, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c,  6, v_role, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c,  7, v_priority);
+        DBMS_SQL.DEFINE_COLUMN(c,  8, v_desc, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c,  9, v_ttable, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 10, v_tcol, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 11, v_trole, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 12, v_tfilter); -- CLOB
+        DBMS_SQL.DEFINE_COLUMN(c, 13, v_frule);   -- CLOB
+        DBMS_SQL.DEFINE_COLUMN(c, 14, v_createdat);
+        DBMS_SQL.DEFINE_COLUMN(c, 15, v_createdby, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 16, v_updatedat);
+        DBMS_SQL.DEFINE_COLUMN(c, 17, v_updatedby, 4000);
+
+        rc := DBMS_SQL.EXECUTE(c);
+
+        WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
+          DBMS_SQL.COLUMN_VALUE(c,  1, v_id);
+          DBMS_SQL.COLUMN_VALUE(c,  2, v_dataset);
+          DBMS_SQL.COLUMN_VALUE(c,  3, v_env);
+          DBMS_SQL.COLUMN_VALUE(c,  4, v_active);
+          DBMS_SQL.COLUMN_VALUE(c,  5, v_match);
+          DBMS_SQL.COLUMN_VALUE(c,  6, v_role);
+          DBMS_SQL.COLUMN_VALUE(c,  7, v_priority);
+          DBMS_SQL.COLUMN_VALUE(c,  8, v_desc);
+          DBMS_SQL.COLUMN_VALUE(c,  9, v_ttable);
+          DBMS_SQL.COLUMN_VALUE(c, 10, v_tcol);
+          DBMS_SQL.COLUMN_VALUE(c, 11, v_trole);
+          DBMS_SQL.COLUMN_VALUE(c, 12, v_tfilter);
+          DBMS_SQL.COLUMN_VALUE(c, 13, v_frule);
+          DBMS_SQL.COLUMN_VALUE(c, 14, v_createdat);
+          DBMS_SQL.COLUMN_VALUE(c, 15, v_createdby);
+          DBMS_SQL.COLUMN_VALUE(c, 16, v_updatedat);
+          DBMS_SQL.COLUMN_VALUE(c, 17, v_updatedby);
+
+          append(
+            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_RULES t' || CHR(10) ||
+            'USING (' || CHR(10) ||
+            '  SELECT ' || TO_CHAR(v_id)         || ' AS ID,' || CHR(10) ||
+            '         ' || q(v_dataset)          || ' AS DATASET,' || CHR(10) ||
+            '         ' || q(v_env)              || ' AS ENVIRONMENT,' || CHR(10) ||
+            '         ' || q(v_active)           || ' AS ACTIVE,' || CHR(10) ||
+            '         ' || q(v_match)            || ' AS MATCH_MODE,' || CHR(10) ||
+            '         ' || q(v_role)             || ' AS ROLE,' || CHR(10) ||
+            '         ' || NVL(TO_CHAR(v_priority),'NULL') || ' AS PRIORITY,' || CHR(10) ||
+            '         ' || q(v_desc)             || ' AS DESCRIPTION,' || CHR(10) ||
+            '         ' || q(v_ttable)           || ' AS TARGET_TABLE,' || CHR(10) ||
+            '         ' || q(v_tcol)             || ' AS TARGET_COLUMN,' || CHR(10) ||
+            '         ' || q(v_trole)            || ' AS TARGET_ROLE,' || CHR(10) ||
+            '         ' || q_clob(v_tfilter)     || ' AS TARGET_FILTER,' || CHR(10) ||
+            '         ' || q_clob(v_frule)       || ' AS FILTER_RULE,' || CHR(10) ||
+            '         ' || q_ts(v_createdat)     || ' AS CREATED_AT,' || CHR(10) ||
+            '         ' || q(v_createdby)        || ' AS CREATED_BY,' || CHR(10) ||
+            '         ' || q_ts(v_updatedat)     || ' AS UPDATED_AT,' || CHR(10) ||
+            '         ' || q(v_updatedby)        || ' AS UPDATED_BY' || CHR(10) ||
+            '  FROM dual' || CHR(10) ||
+            ') s' || CHR(10) ||
+            'ON (t.ID = s.ID)' || CHR(10) ||
+            'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
+            '  t.DATASET       = s.DATASET,' || CHR(10) ||
+            '  t.ENVIRONMENT   = s.ENVIRONMENT,' || CHR(10) ||
+            '  t.ACTIVE        = s.ACTIVE,' || CHR(10) ||
+            '  t.MATCH_MODE    = s.MATCH_MODE,' || CHR(10) ||
+            '  t.ROLE          = s.ROLE,' || CHR(10) ||
+            '  t.PRIORITY      = s.PRIORITY,' || CHR(10) ||
+            '  t.DESCRIPTION   = s.DESCRIPTION,' || CHR(10) ||
+            '  t.TARGET_TABLE  = s.TARGET_TABLE,' || CHR(10) ||
+            '  t.TARGET_COLUMN = s.TARGET_COLUMN,' || CHR(10) ||
+            '  t.TARGET_ROLE   = s.TARGET_ROLE,' || CHR(10) ||
+            '  t.TARGET_FILTER = s.TARGET_FILTER,' || CHR(10) ||
+            '  t.FILTER_RULE   = s.FILTER_RULE,' || CHR(10) ||
+            '  t.CREATED_AT    = s.CREATED_AT,' || CHR(10) ||
+            '  t.CREATED_BY    = s.CREATED_BY,' || CHR(10) ||
+            '  t.UPDATED_AT    = s.UPDATED_AT,' || CHR(10) ||
+            '  t.UPDATED_BY    = s.UPDATED_BY' || CHR(10) ||
+            'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
+            '  ID, DATASET, ENVIRONMENT, ACTIVE, MATCH_MODE, ROLE, PRIORITY, DESCRIPTION,' || CHR(10) ||
+            '  TARGET_TABLE, TARGET_COLUMN, TARGET_ROLE, TARGET_FILTER, FILTER_RULE,' || CHR(10) ||
+            '  CREATED_AT, CREATED_BY, UPDATED_AT, UPDATED_BY' || CHR(10) ||
+            ') VALUES (' || CHR(10) ||
+            '  s.ID, s.DATASET, s.ENVIRONMENT, s.ACTIVE, s.MATCH_MODE, s.ROLE, s.PRIORITY, s.DESCRIPTION,' || CHR(10) ||
+            '  s.TARGET_TABLE, s.TARGET_COLUMN, s.TARGET_ROLE, s.TARGET_FILTER, s.FILTER_RULE,' || CHR(10) ||
+            '  s.CREATED_AT, s.CREATED_BY, s.UPDATED_AT, s.UPDATED_BY' || CHR(10) ||
+            ');' || CHR(10) || CHR(10)
+          );
+        END LOOP;
+
+        DBMS_SQL.CLOSE_CURSOR(c);
+      EXCEPTION
+        WHEN OTHERS THEN
+          IF DBMS_SQL.IS_OPEN(c) THEN DBMS_SQL.CLOSE_CURSOR(c); END IF;
+          append_line('/* WARN: export CHATBOT_GLOSSARY_RULES failed: '||SQLERRM||' */');
+          append_line('');
+      END;
+    END IF;
+
+    --------------------------------------------------------------------------
     -- 4) CHATBOT_GLOSSARY_KEYWORDS
-    --    For rules with DESCRIPTION = 'workload name target filter' we do
-    --    not export any keywords (environment-specific), so target keywords
-    --    for those rules are not touched.
-    ------------------------------------------------------------------------
-    DBMS_LOB.APPEND(l_out, '/* CHATBOT_GLOSSARY_KEYWORDS */' || CHR(10) || CHR(10));
+    --------------------------------------------------------------------------
+    append_line('/* CHATBOT_GLOSSARY_KEYWORDS */');
+    append_line('');
 
-    FOR r IN (
-      SELECT k.RULE_ID,
-             k.ORD,
-             k.KEYWORD
-        FROM CHATBOT_GLOSSARY_KEYWORDS k
-        WHERE NOT EXISTS (
-          SELECT 1
-            FROM CHATBOT_GLOSSARY_RULES gr
-           WHERE gr.ID = k.RULE_ID
-             AND LOWER(gr.DESCRIPTION) = 'workload name target filter'
-        )
-       ORDER BY k.RULE_ID, k.ORD
-    ) LOOP
-      DBMS_LOB.APPEND(
-        l_out,
-          'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_KEYWORDS t' || CHR(10) ||
-          'USING (' || CHR(10) ||
-          '  SELECT ' || r.RULE_ID || ' AS RULE_ID,' || CHR(10) ||
-          '         ' || r.ORD     || ' AS ORD,' || CHR(10) ||
-          '         ' || q(r.KEYWORD) || ' AS KEYWORD' || CHR(10) ||
-          '  FROM dual' || CHR(10) ||
-          ') s' || CHR(10) ||
-          'ON (t.RULE_ID = s.RULE_ID AND t.ORD = s.ORD)' || CHR(10) ||
-          'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
-          '  t.KEYWORD = s.KEYWORD' || CHR(10) ||
-          'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
-          '  RULE_ID, ORD, KEYWORD' || CHR(10) ||
-          ') VALUES (' || CHR(10) ||
-          '  s.RULE_ID, s.ORD, s.KEYWORD' || CHR(10) ||
-          ');' || CHR(10) || CHR(10)
-      );
-    END LOOP;
+    IF NOT table_exists('CHATBOT_GLOSSARY_KEYWORDS') THEN
+      append_line('/* CHATBOT_GLOSSARY_KEYWORDS not found; skipping. */');
+      append_line('');
+    ELSIF NOT table_exists('CHATBOT_GLOSSARY_RULES') THEN
+      append_line('/* CHATBOT_GLOSSARY_RULES missing; cannot apply exclusion rule; skipping keywords export. */');
+      append_line('');
+    ELSE
+      DECLARE
+        c       INTEGER;
+        rc      INTEGER;
+
+        v_rule  NUMBER;
+        v_ord   NUMBER;
+        v_kw    VARCHAR2(4000);
+      BEGIN
+        c := DBMS_SQL.OPEN_CURSOR;
+
+        DBMS_SQL.PARSE(
+          c,
+          'SELECT k.rule_id, k.ord, k.keyword '||
+          '  FROM chatbot_glossary_keywords k '||
+          ' WHERE NOT EXISTS ('||
+          '   SELECT 1 FROM chatbot_glossary_rules gr '||
+          '    WHERE gr.id = k.rule_id '||
+          '      AND LOWER(gr.description) = ''workload name target filter'' '||
+          ' ) '||
+          ' ORDER BY k.rule_id, k.ord',
+          DBMS_SQL.NATIVE
+        );
+
+        DBMS_SQL.DEFINE_COLUMN(c, 1, v_rule);
+        DBMS_SQL.DEFINE_COLUMN(c, 2, v_ord);
+        DBMS_SQL.DEFINE_COLUMN(c, 3, v_kw, 4000);
+
+        rc := DBMS_SQL.EXECUTE(c);
+
+        WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
+          DBMS_SQL.COLUMN_VALUE(c, 1, v_rule);
+          DBMS_SQL.COLUMN_VALUE(c, 2, v_ord);
+          DBMS_SQL.COLUMN_VALUE(c, 3, v_kw);
+
+          append(
+            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_KEYWORDS t' || CHR(10) ||
+            'USING (' || CHR(10) ||
+            '  SELECT ' || TO_CHAR(v_rule) || ' AS RULE_ID,' || CHR(10) ||
+            '         ' || TO_CHAR(v_ord)  || ' AS ORD,' || CHR(10) ||
+            '         ' || q(v_kw)         || ' AS KEYWORD' || CHR(10) ||
+            '  FROM dual' || CHR(10) ||
+            ') s' || CHR(10) ||
+            'ON (t.RULE_ID = s.RULE_ID AND t.ORD = s.ORD)' || CHR(10) ||
+            'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
+            '  t.KEYWORD = s.KEYWORD' || CHR(10) ||
+            'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
+            '  RULE_ID, ORD, KEYWORD' || CHR(10) ||
+            ') VALUES (' || CHR(10) ||
+            '  s.RULE_ID, s.ORD, s.KEYWORD' || CHR(10) ||
+            ');' || CHR(10) || CHR(10)
+          );
+        END LOOP;
+
+        DBMS_SQL.CLOSE_CURSOR(c);
+      EXCEPTION
+        WHEN OTHERS THEN
+          IF DBMS_SQL.IS_OPEN(c) THEN DBMS_SQL.CLOSE_CURSOR(c); END IF;
+          append_line('/* WARN: export CHATBOT_GLOSSARY_KEYWORDS failed: '||SQLERRM||' */');
+          append_line('');
+      END;
+    END IF;
 
     RETURN l_out;
   END;
