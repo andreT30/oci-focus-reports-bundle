@@ -1,0 +1,12 @@
+flowchart LR
+  OCI[OCI Cost & Usage Reports] --> J1[Scheduled Jobs]
+
+  J1 --> RAW[Raw/Staging Tables]
+  RAW --> AGG[Aggregations & Normalization]
+  AGG --> FACT[Cost Time-Series Tables]
+
+  FACT --> V[Analytics Views]
+  V --> APEX[Dashboards & Reports]
+
+  CFG[APP_CONFIG] --> J1
+  CFG --> AGG

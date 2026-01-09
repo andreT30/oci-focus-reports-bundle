@@ -1,7 +1,5 @@
 # User Guide
 
-Home: [README](../README.md) · **Docs** · **User Guide**
-
 This guide explains how to use the application as an **end user** to analyze OCI cost, usage, resources, and trends, and how to ask questions using the built-in AI chatbot.
 
 No Oracle or SQL knowledge is required.
@@ -326,8 +324,3 @@ If something looks wrong, it is almost always:
 - missing tags
 - misconfigured workload
 - incomplete data for the selected period
-
-**See also**
-- [APEX Pages Map](apex-pages.md)
-- [Admin Guide](admin-guide.md)
-- [Troubleshooting](troubleshooting.md)

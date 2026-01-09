@@ -1,7 +1,5 @@
 # Configuration
 
-Home: [README](../README.md) · **Docs** · **Configuration**
-
 ## Overview
 The application is configured entirely through **database tables**, primarily `APP_CONFIG`.
 
@@ -140,6 +138,3 @@ Check:
 
 Details: [troubleshooting.md](troubleshooting.md)
 
-**See also**
-- [Admin Guide](admin-guide.md)
-- [Deployment Guide](deployment.md)

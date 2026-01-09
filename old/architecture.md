@@ -1,7 +1,5 @@
 # Architecture
 
-Home: [README](../README.md) · **Docs** · **Architecture**
-
 ## Overview
 The application follows a **three-layer architecture**:
 
@@ -192,7 +190,4 @@ Key points:
 - Aggregations and normalization occur centrally
 - Dashboards and chatbot read from the same facts
 
-**See also**
-- [Data Model](data-model.md)
-- [Deployment Guide](deployment.md)
-- [Security Model](security.md)
+

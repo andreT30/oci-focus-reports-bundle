@@ -1,7 +1,5 @@
 # Security & Trust Model
 
-Home: [README](../README.md) · **Docs** · **Security & Trust Model**
-
 This document explains how the application protects data, enforces access, and ensures trustworthy results.
 
 It is written for:
@@ -255,7 +253,3 @@ Admins can control scope.
 Auditors can verify behavior.
 
 This is by design.
-
-**See also**
-- [Admin Guide](admin-guide.md)
-- [Deployment Guide](deployment.md)

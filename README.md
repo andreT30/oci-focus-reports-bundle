@@ -61,6 +61,27 @@ No SQL or Oracle expertise is required for end users.
 
 ---
 
+## Alignment with FOCUS FinOps Standard
+
+This application is designed to support organizations following the **FOCUS FinOps Framework** — a widely adopted set of principles and practices for financial accountability in cloud environments maintained by the FinOps Foundation (see https://focus.finops.org/).
+
+The FOCUS FinOps Standard defines four key use cases for cost and usage analytics:
+
+- **Find**: Discover and understand cloud spend and usage
+- **Organize**: Structure cost data by business entities like teams, workloads, and projects
+- **Compute**: Analyze and quantify cost drivers and metrics
+- **Optimize**: Plan, recommend, and implement efficiency actions
+
+This platform provides dashboards, reports, and tooling that directly support these use cases, and is designed to help practitioners move along the FinOps maturity curve using both curated analytics and natural-language exploration.
+
+### FOCUS FinOps Standard Framework
+
+![FOCUS FinOps Framework](https://focus.finops.org/wp-content/uploads/2025/12/BG-Image-v3.png)
+
+*Source: https://focus.finops.org/*
+
+---
+
 ## High-level architecture
 
 The application follows a **database-first, three-layer architecture**:
@@ -86,6 +107,51 @@ Detailed walkthrough:
 `docs/usage-guide.md`
 
 ---
+
+## Documentation
+
+
+> **New here? Start with…**
+>
+> - 👤 **End users** → [User Guide](docs/usage-guide.md)  
+>   Learn how to use dashboards, reports, and the AI chatbot.
+> - 🛠 **Admins / Operators** → [Admin & Operations Guide](docs/admin-guide.md)  
+>   Learn configuration, job control, and day-to-day operations.
+> - 🧱 **Architects / Reviewers** → [Architecture](docs/architecture.md) + [Security Model](docs/security.md)  
+>   Understand system design, data flow, and trust boundaries.
+>
+
+### Getting started
+- [User Guide](docs/usage-guide.md)  
+  How to use dashboards, reports, and the chatbot.
+- [APEX Pages Map](docs/apex-pages.md)  
+  Page-by-page map of the application UI.
+
+### Architecture & design
+- [Architecture](docs/architecture.md)  
+  System components, data flow, and diagrams.
+- [Data Model](docs/data-model.md)  
+  Core tables, relationships, and analytical model.
+- [Configuration](docs/configuration.md)  
+  `APP_CONFIG` keys and runtime behavior.
+- [Security Model](docs/security.md)  
+  Authentication, authorization, and trust boundaries.
+
+### Operations
+- [Deployment Guide](docs/deployment.md)  
+  **Initial installation only** (Deployment Manager).
+- [Update Guide](docs/update.md)  
+  In-app updates and dry-run behavior.
+- [Admin & Operations Guide](docs/admin-guide.md)  
+  Day-to-day administration and job control.
+- [Troubleshooting](docs/troubleshooting.md)  
+  Common issues and diagnostics.
+
+### Internals
+- [NL2SQL Chatbot](docs/chatbot.md)  
+  Chatbot pipeline, glossary, and execution model.
+- [Deployment Manager API](docs/deploy-manager-api.md)  
+  Supported export/import APIs.
 
 ## Deployment vs Updates (important)
 

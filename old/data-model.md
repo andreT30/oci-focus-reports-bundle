@@ -1,7 +1,5 @@
 # Data Model
 
-Home: [README](../README.md) · **Docs** · **Data Model**
-
 ## Overview
 The application is built around a **cost-centric analytical data model**, enriched with OCI resource metadata, tagging, relationships, configuration, and logging.
 
@@ -191,6 +189,3 @@ This is critical for operating the system in production.
 - Applies filters based on glossary rules
 - Logs every step
 
-**See also**
-- [Architecture](architecture.md)
-- [Chatbot](chatbot.md)

@@ -1,7 +1,5 @@
 # NL2SQL Chatbot
 
-Home: [README](../README.md) · **Docs** · **NL2SQL Chatbot**
-
 ## Purpose
 The NL2SQL chatbot allows users to query OCI cost and resource data using **natural language**, without writing SQL.
 
@@ -215,7 +213,3 @@ Common issues:
 
 All failures are logged with actionable detail.
 
-**See also**
-- [Usage Guide](usage-guide.md)
-- [Admin Guide](admin-guide.md)
-- [Security Model](security.md)

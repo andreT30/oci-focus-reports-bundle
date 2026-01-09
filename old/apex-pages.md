@@ -1,7 +1,5 @@
 # APEX Pages Map
 
-Home: [README](../README.md) · **Docs** · **APEX Pages Map**
-
 This document maps Oracle APEX pages to functional documentation so users (and admins) can understand where to go in the app and what each page does.
 
 APEX App: **1200**
@@ -228,7 +226,3 @@ Below is the extracted detail for the most important pages. (Regions are the maj
 - Manage workloads/subscriptions/reports, data loading, job editing, and initial setup operations.
 
 ---
-
-**See also**
-- [Usage Guide](usage-guide.md)
-- [Admin Guide](admin-guide.md)

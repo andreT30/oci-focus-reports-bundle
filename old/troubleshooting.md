@@ -1,7 +1,5 @@
 # Troubleshooting
 
-Home: [README](../README.md) · **Docs** · **Troubleshooting**
-
 ## General Approach
 All components log their behavior.
 Always start by identifying:
@@ -96,6 +94,3 @@ Before raising an issue:
 - export logs
 - note environment
 
-**See also**
-- [Admin Guide](admin-guide.md)
-- [Deployment Guide](deployment.md)
