@@ -1,258 +1,235 @@
 # Administration & Operations Guide
 
-This guide is for:
-- application administrators
-- platform owners
-- FinOps / cloud operations leads
-- power users managing configuration and data
+This guide is for **application administrators and operators**.
+It covers configuration, monitoring, and operational control **after initial deployment**.
 
-It explains how to **operate, configure, and extend** the application safely.
+> Initial installation is documented in `docs/deployment.md`.  
+> Application updates are handled **inside the application UI** and documented in `docs/update.md`.
 
 ---
 
-## Admin Responsibilities
+## Administrator Responsibilities
 
 Administrators are responsible for:
-- configuring environments
-- managing workloads and subscriptions
-- maintaining chatbot metadata
-- monitoring jobs and data freshness
-- troubleshooting issues
 
-No code changes are required for normal administration.
+- validating post-deployment configuration
+- managing workloads and subscriptions
+- controlling scheduler jobs
+- maintaining chatbot metadata
+- monitoring runs, logs, and data freshness
+
+Administrators **do not** deploy or update the application manually via SQL.
 
 ---
 
 ## Access Control
 
-Administrative pages are protected via:
-- APEX authorization schemes
-- application roles
+Administrative capabilities are protected using:
 
-Only authorized users should have access to:
+- Oracle APEX authorization schemes
+- application-level roles
+
+Only authorized users can access:
 - configuration pages
-- data load operations
+- workload and subscription management
+- job control
 - chatbot metadata editors
-
----
-
-## Workload Administration
-
-### Pages
-- **Create Workload**
-- **My Reports & Workloads**
-
-### Purpose
-Workloads define logical groupings used across:
-- dashboards
-- reports
-- chatbot queries
-
----
-
-### Best Practices
-- keep workload definitions stable
-- avoid overlapping definitions
-- document naming conventions
-- validate workloads against real resources
-
-Misconfigured workloads lead to misleading analytics.
-
----
-
-## Subscription Management
-
-### Pages
-- **Create Subscription Detail**
-
-### Purpose
-Manage OCI subscription metadata:
-- PAYG vs non-PAYG
-- credit pools
-- subscription boundaries
-
-This impacts:
-- projections
-- credit depletion views
-- executive reporting
-
----
-
-## Data Load & Initialization
-
-### Pages
-- **Initial Load**
-- **Data Load**
-
-### Initial Load
-Used once per environment to:
-- bootstrap data
-- initialize baseline metadata
-
----
-
-### Data Load
-Used for:
-- reprocessing
-- manual refresh
-- controlled ingestion
-
----
-
-### Best Practices
-- run Initial Load only once
-- use Data Load for corrections
-- verify logs after every run
-
----
-
-## Scheduler Jobs
-
-### Pages
-- **Edit Scheduler Job**
-
-### Purpose
-View and control background jobs that:
-- refresh cost data
-- aggregate time series
-- sync resource metadata
-
----
-
-### Operational Guidance
-- jobs should run during off-peak hours
-- never enable jobs before configuration is complete
-- monitor job duration trends
-
----
-
-## Chatbot Administration
-
-### Pages
-- Chatbot Parameters
-- Update ChatBotParams
-- NL2SQL Table Definition Tool
-- Update Summaries
-- Update Business Glossary
-- Create Business Glossary
-
----
-
-### What Admins Control
-- glossary rules
-- keywords and synonyms
-- dataset definitions
-- summaries
-- routing behavior
-
----
-
-### Extending Chatbot Coverage
-
-To support new business language:
-1. Create glossary rule
-2. Add keywords/synonyms
-3. Test via chatbot UI
-4. Monitor logs
-
-No PL/SQL changes required in most cases.
+- update workflows
 
 ---
 
 ## Configuration Management
 
-### Central Table
+### Central Configuration Table
 - `APP_CONFIG`
 
-### Rules
-- keys are stable
-- values vary by environment
-- secrets are external
+All runtime behavior is driven from configuration values:
+- OCI scope (compartments, regions)
+- tagging conventions
+- feature toggles
+- chatbot behavior
+
+Best practices:
+- treat configuration as code
+- document every change
+- validate after each change
 
 ---
 
-### Change Management
-- update config via admin UI or SQL
-- test impact in lower environments
-- log and document changes
+## Workload Administration
+
+### Purpose
+Workloads define logical groupings used by:
+- dashboards
+- reports
+- cost attribution
+- chatbot queries
+
+### Admin Pages
+- **Create Workload**
+- **My Reports & Workloads**
+
+### Best Practices
+- avoid overlapping workload definitions
+- keep naming consistent
+- validate workloads against real resources
+
+Incorrect workload definitions lead to misleading analytics.
+
+---
+
+## Subscription Management
+
+### Purpose
+Manage OCI subscription metadata used by:
+- credit tracking
+- projections
+- executive dashboards
+
+### Admin Pages
+- **Create Subscription Detail**
+
+Changes here directly affect financial reporting.
+
+---
+
+## Scheduler Jobs
+
+### Source of Jobs
+All application scheduler jobs are defined in the bundle under:
+
+```
+db/ddl/90_jobs.sql
+```
+
+During initial deployment:
+- jobs are created **disabled**
+- no jobs are enabled automatically
+
+---
+
+### Job Lifecycle
+
+Administrators control job lifecycle entirely from the application:
+
+1. Review job definitions
+2. Enable jobs after configuration validation
+3. Monitor execution and duration
+4. Disable jobs during maintenance or incidents
+
+Jobs should **never** be enabled before configuration is complete.
+
+---
+
+### Job Monitoring
+Use admin pages and logs to:
+- verify successful execution
+- identify failures
+- observe execution time trends
+
+---
+
+## Data Load & Initialization
+
+### Initial Load
+Performed once after deployment to bootstrap data.
+
+### Data Load
+Used for controlled reprocessing or corrections.
+
+These operations are exposed via the admin UI and logged.
+
+---
+
+## Chatbot Administration
+
+### What Admins Control
+- business glossary rules
+- keywords and synonyms
+- dataset metadata
+- summaries used in responses
+
+### Admin Pages
+- Business Glossary editors
+- Chatbot parameter pages
+- Debug and inspection pages
+
+---
+
+### Extending Chatbot Coverage
+To support new business language:
+1. Add or update glossary rules
+2. Add keywords/synonyms
+3. Test via chatbot UI
+4. Monitor logs
+
+No deployment or update is required.
+
+---
+
+## Application Updates
+
+Application updates are **not performed via SQL scripts**.
+
+Updates are:
+- triggered from the application UI
+- executed using the internal Deployment Manager
+- logged and auditable
+
+See: `docs/update.md`
 
 ---
 
 ## Monitoring & Logging
 
-### What is Logged
-- job execution
+### What Is Logged
+- job executions
+- data load runs
 - chatbot requests
-- SQL generation
+- deployment/update runs
 - errors and warnings
 
----
-
-### How to Monitor
-- use built-in admin pages
-- query logging tables
-- correlate via run/request IDs
-
----
-
-## Troubleshooting Workflow
-
-1. Identify issue
-2. Capture run/request ID
-3. Inspect logs
-4. Validate configuration
-5. Adjust workload/glossary/config
-6. Re-test
+### Operator Guidance
+- always capture run IDs
+- use logs as the primary troubleshooting source
+- never modify data directly to fix issues
 
 ---
 
 ## Operational Checklists
 
-### After Deployment
-- [ ] APEX app loads
-- [ ] Config keys populated
-- [ ] Jobs disabled
-- [ ] Initial load completed
-- [ ] Jobs enabled
-- [ ] Dashboards populated
-- [ ] Chatbot answers basic questions
+### After Initial Deployment
+- [ ] configuration completed (`APP_CONFIG`)
+- [ ] initial data load executed
+- [ ] dashboards render correctly
+- [ ] chatbot initializes
+- [ ] jobs reviewed but still disabled
 
 ---
 
-### After Configuration Changes
-- [ ] Validate dashboards
-- [ ] Validate chatbot
-- [ ] Check job logs
-
----
-
-## Governance & Audit
-
-- All actions are logged
-- Chatbot SQL is traceable
-- Cost attribution logic is transparent
-
-This supports:
-- audits
-- cost governance
-- compliance reviews
+### Before Enabling Jobs
+- [ ] configuration validated
+- [ ] data load successful
+- [ ] admin access verified
+- [ ] monitoring in place
 
 ---
 
 ## Common Admin Mistakes
 
 - enabling jobs too early
-- changing tag keys without validation
+- modifying data outside the app
 - overlapping workload definitions
-- ignoring chatbot logs
+- changing tag keys without validation
+- attempting updates via SQL
 
 ---
 
-## Final Notes
+## Governance & Audit
 
-Treat configuration as **code**:
-- document changes
-- review before applying
-- test in non-prod environments
+- all operations are logged
+- chatbot SQL is traceable
+- configuration changes are auditable
+- deployment and updates are separated
 
-This application rewards discipline with clarity.
+This separation is intentional and reduces operational risk.
