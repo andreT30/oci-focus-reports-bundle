@@ -120,9 +120,3 @@ Details: [chatbot.md](chatbot.md)
 - Failures are diagnosable via run IDs and logs
 - Deployment is repeatable via SQL + APEX import
 
----
-
-Next documents:
-- `data-model.md`
-- `configuration.md`
-- `chatbot.md`
