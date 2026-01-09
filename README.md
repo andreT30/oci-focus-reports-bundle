@@ -1,4 +1,4 @@
-# OCI Cost Analytics & NL2SQL Chatbot  
+# OCI Cost Analytics & NL2SQL Chatbot
 **Oracle APEX • Oracle Autonomous Database • OCI FinOps**
 
 ---
@@ -19,14 +19,10 @@ It runs on **Oracle Autonomous Database (ADB)** with **Oracle APEX**, and integr
 
 ## Who this is for
 
-- **FinOps / Finance teams**  
-  Understand spend, trends, credits, and chargeback.
-- **Engineering & Operations**  
-  Analyze workloads, services, resources, and usage.
-- **Platform owners & Architects**  
-  Govern OCI usage with transparency and control.
-- **Executives & Stakeholders**  
-  High-level visibility without technical complexity.
+- **FinOps / Finance teams** – cost visibility, trends, credits, chargeback
+- **Engineering & Operations** – workload, service, and resource analytics
+- **Platform owners & Architects** – OCI governance and accountability
+- **Executives & Stakeholders** – high-level insights without technical complexity
 
 No SQL or Oracle expertise is required for end users.
 
@@ -52,9 +48,9 @@ No SQL or Oracle expertise is required for end users.
 - Tag-based attribution and filtering
 
 ### NL2SQL AI Chatbot
-- Ask questions in natural language (e.g. *“cost last month by service”*)
+- Ask questions in natural language (e.g. “cost last month by service”)
 - Deterministic, metadata-driven SQL generation
-- Fully logged and explainable (no black box)
+- Fully logged and explainable
 - Safe execution with guardrails
 
 ### Enterprise-Ready Design
@@ -70,11 +66,11 @@ No SQL or Oracle expertise is required for end users.
 The application follows a **database-first, three-layer architecture**:
 
 - **Presentation**: Oracle APEX (dashboards, reports, chatbot UI)
-- **Logic**: PL/SQL packages (analytics, chatbot, jobs)
+- **Logic**: PL/SQL packages (analytics, chatbot, deployment manager)
 - **Data**: OCI cost usage, resources, relationships, configuration
 
-📐 See the full architecture diagram in  
-[`docs/architecture.md`](docs/architecture.md)
+See the full architecture and diagrams in  
+`docs/architecture.md`.
 
 ---
 
@@ -86,36 +82,91 @@ Typical flow:
 3. Use the **AI chatbot** when you don’t know where to start
 4. Explore resources and tags via **Resource Explorer**
 
-🧭 Page-by-page walkthrough:  
-[`docs/usage-guide.md`](docs/usage-guide.md)
+Detailed walkthrough:  
+`docs/usage-guide.md`
 
 ---
 
-## NL2SQL chatbot (why it’s different)
+## Deployment vs Updates (important)
 
-This is **not** a free-form LLM guessing SQL.
+This project **explicitly separates** initial deployment from application updates.
 
-The chatbot:
-- uses explicit glossary rules and metadata
-- only generates SQL against known datasets
-- applies validation and execution limits
-- logs every step (input → SQL → result)
+### Initial deployment
+- Performed **once per environment**
+- Executed via a **Deployment Manager PL/SQL package**
+- Consumes the **bundle ZIP as a ZIP (BLOB)** — no extraction
+- Uses a **scheduler job** for deployment
 
-🔍 See the full pipeline and diagrams:  
-[`docs/chatbot.md`](docs/chatbot.md)
+See:  
+`docs/deployment.md`
+
+### Application updates
+- Performed **inside the application UI**
+- No SQL scripts or manual redeployments
+- Supports dry-run mode
+- Fully logged and auditable
+
+See:  
+`docs/update.md`
+
+---
+
+## Scheduler jobs
+
+All application scheduler jobs are defined in:
+
+```
+db/ddl/90_jobs.sql
+```
+
+Behavior:
+- Jobs are created **disabled** during deployment
+- Administrators enable them only after configuration validation
+- Job lifecycle is controlled via the application admin UI
+
+Details:  
+`docs/admin-guide.md`
+
+---
+
+## Configuration model
+
+All runtime behavior is driven by configuration tables (primarily `APP_CONFIG`):
+
+- no hardcoded OCIDs
+- no hardcoded tag keys
+- no environment-specific logic in code
+
+See:  
+`docs/configuration.md`
+
+---
+
+## Administration & operations
+
+Administrators can:
+- manage workloads and subscriptions
+- control scheduler jobs
+- manage chatbot glossary and metadata
+- monitor runs, logs, and data freshness
+
+Administrators **do not deploy or update** the application via SQL.
+
+See:  
+`docs/admin-guide.md`
 
 ---
 
 ## Security & trust
 
-- Authentication handled by Oracle APEX / IAM
-- Role-based authorization for users and admins
+- Authentication via Oracle APEX / IAM
+- Role-based authorization
 - No OCI credentials or secrets in GitHub
 - Deterministic SQL generation (no injection risk)
-- Full logging and audit trail
+- Full audit trail for deployments, updates, jobs, and chatbot execution
 
-🔐 Security model and trust boundaries:  
-[`docs/security.md`](docs/security.md)
+See:  
+`docs/security.md`
 
 ---
 
@@ -123,65 +174,27 @@ The chatbot:
 
 ```
 apex/
-f1200.sql             # Oracle APEX application export
+  f1200.sql                # Oracle APEX application export
 
 db/
-ddl/                  # Tables, views, packages, jobs
-migrations/           # Bundle migration metadata
+  ddl/                     # Tables, views, packages, jobs
+  migrations/              # Bundle migration metadata
 
 docs/
-architecture.md
-apex-pages.md
-usage-guide.md
-admin-guide.md
-chatbot.md
-configuration.md
-data-model.md
-deployment.md
-troubleshooting.md
-security.md
-diagrams/
+  architecture.md
+  apex-pages.md
+  usage-guide.md
+  admin-guide.md
+  chatbot.md
+  configuration.md
+  data-model.md
+  deployment.md
+  update.md
+  troubleshooting.md
+  security.md
+  deploy-manager-api.md
+  diagrams/
 ```
-
-
----
-
-## Deployment overview
-
-1. Deploy database objects (`db/ddl`)
-2. Seed baseline configuration and chatbot metadata
-3. Import the APEX application
-4. Configure environment-specific values
-5. Enable scheduled jobs
-
-📦 Full instructions:  
-[`docs/deployment.md`](docs/deployment.md)
-
----
-
-## Configuration model
-
-All behavior is driven by configuration tables (primarily `APP_CONFIG`):
-
-- no hardcoded OCIDs
-- no hardcoded tag keys
-- no environment-specific logic in code
-
-📘 Configuration reference:  
-[`docs/configuration.md`](docs/configuration.md)
-
----
-
-## Administration & operations
-
-Admins can:
-- manage workloads and subscriptions
-- control data loads and refresh jobs
-- extend chatbot vocabulary
-- monitor logs and executions
-
-🛠 Admin guide:  
-[`docs/admin-guide.md`](docs/admin-guide.md)
 
 ---
 
@@ -189,7 +202,7 @@ Admins can:
 
 - **Explainable analytics** (no hidden logic)
 - **Explainable AI** (NL2SQL with full traceability)
-- **Enterprise governance** without sacrificing usability
+- **Clear operational boundaries** (deploy vs update)
 - **Designed for real FinOps workflows**, not demos
 
 ---
@@ -199,6 +212,7 @@ Admins can:
 This repository contains:
 - production APEX application export
 - full database schema and logic
+- a documented deployment manager
 - complete end-user, admin, and security documentation
 
 It is ready for:
@@ -209,14 +223,4 @@ It is ready for:
 
 ---
 
-## Next steps (optional)
-
-- Add screenshots to the usage guide
-- Add Mermaid diagrams to README sections
-- Split public vs internal documentation
-- Add `CHANGELOG.md` and `CONTRIBUTING.md`
-
----
-
-**This documentation is part of the product.**  
-If something is unclear, it should be documented—not hidden.
+**Documentation is part of the product.**
