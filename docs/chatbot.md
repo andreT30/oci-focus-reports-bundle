@@ -54,16 +54,18 @@ flowchart TD
   ROUTER --> GLOSS[Glossary Rules]
   ROUTER --> META[Dataset Metadata]
 
-  GLOSS --> SQLGEN[SQL Generator]
+  GLOSS --> SQLGEN[SQL Generator/Reasoner]
   META --> SQLGEN
 
   SQLGEN --> VALID[Validate & Guardrails]
   VALID --> EXEC[Execute SQL]
 
   EXEC --> RES[Result Set]
-  RES --> SUM[Summarization]
+  RES --> TOK[Tokenize PII]
+  TOK --> SUM[Summarization]
 
-  SUM --> UI[Chatbot Response]
+  SUM --> DETOK[Detokenize PII]
+  DETOK --> UI[Chatbot Response]
 
   SQLGEN --> LOG[Execution Log]
   EXEC --> LOG

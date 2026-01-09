@@ -96,8 +96,7 @@ The application follows a **database-first, three-layer architecture**:
 - **Logic**: PL/SQL packages (analytics, chatbot, deployment manager)
 - **Data**: OCI cost usage, resources, relationships, configuration
 
-See the full architecture and diagrams in  
-`docs/architecture.md`.
+See the full architecture and diagrams in [Architecture](docs/architecture.md).
 
 ---
 
@@ -109,8 +108,7 @@ Typical flow:
 3. Use the **AI chatbot** when you don’t know where to start
 4. Explore resources and tags via **Resource Explorer**
 
-Detailed walkthrough:  
-`docs/usage-guide.md`
+Detailed walkthrough:  [User Guide](docs/usage-guide.md) 
 
 ---
 
@@ -239,12 +237,12 @@ See:  [Security Model](docs/security.md)
 ## Repository structure
 
 ```
-apex/
-  f1200.sql                # Oracle APEX application export
+bundle_app1200.zip         # The zip that contains all the application assets
 
 db/
-  ddl/                     # Tables, views, packages, jobs
-  migrations/              # Bundle migration metadata
+  ov_run_as_admin.sql      # SQL script to run as ADMIN
+  deploy_manager_ddl.sql   # Deploy manager script to create DB objects, run as db application owner
+  deploy_manager_pkg.sql   # Deploy manager package, run as db application owner
 
 docs/
   architecture.md

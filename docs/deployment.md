@@ -110,8 +110,8 @@ END;
 
 ### Step 4 — Monitor
 Connect as the application schema owner and run the below queries:
-```SELECT * FROM deploy_runs ORDER BY run_id DESC;```
-```SELECT * FROM deploy_applied ORDER BY applied_at DESC;```
+- ```SELECT * FROM deploy_runs ORDER BY run_id DESC;```
+- ```SELECT * FROM deploy_applied ORDER BY applied_at DESC;```
 
 ---
 
@@ -152,7 +152,7 @@ Deployment issues should always be investigated via these logs.
 - Dry-run update behavior
 - Bundle export
 
-These topics are documented separately in `docs/update.md`.
+These topics are documented separately in [Update Guide](update.md).
 
 **See also**
 - [Update Guide](update.md)
