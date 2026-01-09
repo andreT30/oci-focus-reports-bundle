@@ -169,8 +169,7 @@ This project **explicitly separates** initial deployment from application update
 - Consumes the **bundle ZIP as a ZIP (BLOB)** — no extraction
 - Uses a **scheduler job** for deployment
 
-See:  
-`docs/deployment.md`
+See:  [Deployment Guide](docs/deployment.md) 
 
 ### Application updates
 - Performed **inside the application UI**
@@ -178,8 +177,7 @@ See:
 - Supports dry-run mode
 - Fully logged and auditable
 
-See:  
-`docs/update.md`
+See:  [Update Guide](docs/update.md)
 
 ---
 
@@ -196,8 +194,7 @@ Behavior:
 - Administrators enable them only after configuration validation
 - Job lifecycle is controlled via the application admin UI
 
-Details:  
-`docs/admin-guide.md`
+Details:  [Admin & Operations Guide](docs/admin-guide.md) 
 
 ---
 
@@ -209,8 +206,7 @@ All runtime behavior is driven by configuration tables (primarily `APP_CONFIG`):
 - no hardcoded tag keys
 - no environment-specific logic in code
 
-See:  
-`docs/configuration.md`
+See:  [Configuration](docs/configuration.md)
 
 ---
 
@@ -224,8 +220,7 @@ Administrators can:
 
 Administrators **do not deploy or update** the application via SQL.
 
-See:  
-`docs/admin-guide.md`
+See:  [Admin & Operations Guide](docs/admin-guide.md) 
 
 ---
 
@@ -237,8 +232,7 @@ See:
 - Deterministic SQL generation (no injection risk)
 - Full audit trail for deployments, updates, jobs, and chatbot execution
 
-See:  
-`docs/security.md`
+See:  [Security Model](docs/security.md)  
 
 ---
 

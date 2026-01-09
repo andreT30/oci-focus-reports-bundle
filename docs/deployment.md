@@ -108,7 +108,14 @@ END;
 
 ---
 
-### Step 4 — Validate
+### Step 4 — Monitor
+Connect as the application schema owner and run the below queries:
+```SELECT * FROM deploy_runs ORDER BY run_id DESC;```
+```SELECT * FROM deploy_applied ORDER BY applied_at DESC;```
+
+---
+
+### Step 5 — Validate
 After the job completes:
 - open the APEX application
 - verify core pages load
@@ -117,7 +124,7 @@ After the job completes:
 
 ---
 
-### Step 5 — Enable jobs
+### Step 6 — Enable jobs
 Jobs defined in `db/ddl/90_jobs.sql` are created **disabled**.
 
 Enable them only after:
