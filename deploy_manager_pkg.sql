@@ -253,8 +253,9 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
   ------------------------------------------------------------------------------
   -- Job export (basic; secrets/credentials are NOT exported)
   --  - If job does not exist on target: CREATE_JOB
-  --  - If job exists: SET_ATTRIBUTE / SET_ATTRIBUTE_NULL (no DROP)
-  --  - If job_type differs: raise (job_type is not safely mutable)
+  --  - If job exists:
+  --      * If job_type differs: DROP + CREATE (Policy A)
+  --      * Else: DISABLE, SET_ATTRIBUTE/SET_ATTRIBUTE_NULL, then ENABLE per policy
   ------------------------------------------------------------------------------
   FUNCTION export_jobs RETURN CLOB IS
     l_out     CLOB := EMPTY_CLOB();
@@ -273,7 +274,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         '   - If source is DISABLED: force job disabled on target.'||CHR(10)||
         '   - If job does not exist on target: new job follows source enabled flag.'||CHR(10)||
         '   Update logic:'||CHR(10)||
-        '   - If job exists and job_type differs: ERROR (job_type not updated automatically).'||CHR(10)||
+        '   - If job exists and job_type differs: DROP + CREATE (Policy A).'||CHR(10)||
         '   - Else: disable job, update changed attributes, then enable/disable per policy.'||CHR(10)||
         '*/'||CHR(10)||CHR(10)
     );
@@ -357,82 +358,123 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
             '      FROM user_scheduler_jobs' || CHR(10) ||
             '     WHERE job_name = ''' || j.job_name || ''';' || CHR(10) ||
             CHR(10) ||
-            '    -- job_type cannot be safely updated via SET_ATTRIBUTE -> fail fast' || CHR(10) ||
+            '    ----------------------------------------------------------------' || CHR(10) ||
+            '    -- Policy A: if job_type differs, DROP + CREATE' || CHR(10) ||
+            '    ----------------------------------------------------------------' || CHR(10) ||
             '    IF NVL(l_job_type,''#'') <> NVL(d_job_type,''#'') THEN' || CHR(10) ||
-            '      raise_application_error(-20051,' || CHR(10) ||
-            '        ''Job ' || j.job_name || ' exists but job_type differs. target=''||l_job_type||'' source=''||d_job_type);' || CHR(10) ||
-            '    END IF;' || CHR(10) ||
+            '      BEGIN' || CHR(10) ||
+            '        DBMS_SCHEDULER.DISABLE(''' || j.job_name || ''', force => TRUE);' || CHR(10) ||
+            '      EXCEPTION WHEN OTHERS THEN NULL; END;' || CHR(10) ||
             CHR(10) ||
-            '    -- Disable while updating (safe even if already disabled)' || CHR(10) ||
-            '    DBMS_SCHEDULER.DISABLE(''' || j.job_name || ''', force => TRUE);' || CHR(10) ||
+            '      BEGIN' || CHR(10) ||
+            '        DBMS_SCHEDULER.DROP_JOB(job_name => ''' || j.job_name || ''', force => TRUE);' || CHR(10) ||
+            '      EXCEPTION WHEN OTHERS THEN NULL; END;' || CHR(10) ||
             CHR(10) ||
-            '    -- job_action' || CHR(10) ||
-            '    IF NVL(l_job_action,''#'') <> NVL(d_job_action,''#'') THEN' || CHR(10) ||
-            '      DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
-            '        name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '        attribute => ''job_action'',' || CHR(10) ||
-            '        value     => d_job_action' || CHR(10) ||
+            '      DBMS_SCHEDULER.CREATE_JOB(' || CHR(10) ||
+            '        job_name        => ''' || j.job_name || ''',' || CHR(10) ||
+            '        job_type        => d_job_type,' || CHR(10) ||
+            '        job_action      => d_job_action,' || CHR(10) ||
+            CASE
+              WHEN j.repeat_interval IS NOT NULL THEN
+                '        repeat_interval => d_repeat_interval,' || CHR(10)
+              ELSE
+                ''
+            END ||
+            CASE
+              WHEN j.start_date IS NOT NULL THEN
+                '        start_date      => d_start_date,' || CHR(10)
+              ELSE
+                ''
+            END ||
+            '        enabled         => (NVL(l_target_enabled, ''FALSE'') = ''TRUE''),' || CHR(10) ||
+            '        auto_drop       => FALSE' || CHR(10) ||
+            CASE
+              WHEN j.comments IS NOT NULL THEN
+                '      , comments        => d_comments' || CHR(10)
+              ELSE
+                ''
+            END ||
             '      );' || CHR(10) ||
-            '    END IF;' || CHR(10) ||
             CHR(10) ||
-            '    -- repeat_interval' || CHR(10) ||
-            '    IF d_repeat_interval IS NULL THEN' || CHR(10) ||
-            '      IF l_repeat_interval IS NOT NULL THEN' || CHR(10) ||
-            '        DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '      -- Enforce disabled if policy says disabled' || CHR(10) ||
+            '      IF NVL(l_target_enabled, ''FALSE'') <> ''TRUE'' THEN' || CHR(10) ||
+            '        BEGIN DBMS_SCHEDULER.DISABLE(''' || j.job_name || ''', force => TRUE); EXCEPTION WHEN OTHERS THEN NULL; END;' || CHR(10) ||
+            '      END IF;' || CHR(10) ||
+            CHR(10) ||
+            '    ELSE' || CHR(10) ||
+            '      --------------------------------------------------------------' || CHR(10) ||
+            '      -- Same job_type: DISABLE + SET_ATTRIBUTE where needed' || CHR(10) ||
+            '      --------------------------------------------------------------' || CHR(10) ||
+            '      DBMS_SCHEDULER.DISABLE(''' || j.job_name || ''', force => TRUE);' || CHR(10) ||
+            CHR(10) ||
+            '      -- job_action' || CHR(10) ||
+            '      IF NVL(l_job_action,''#'') <> NVL(d_job_action,''#'') THEN' || CHR(10) ||
+            '        DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
             '          name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '          attribute => ''repeat_interval''' || CHR(10) ||
+            '          attribute => ''job_action'',' || CHR(10) ||
+            '          value     => d_job_action' || CHR(10) ||
             '        );' || CHR(10) ||
             '      END IF;' || CHR(10) ||
-            '    ELSIF NVL(l_repeat_interval,''#'') <> NVL(d_repeat_interval,''#'') THEN' || CHR(10) ||
-            '      DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
-            '        name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '        attribute => ''repeat_interval'',' || CHR(10) ||
-            '        value     => d_repeat_interval' || CHR(10) ||
-            '      );' || CHR(10) ||
-            '    END IF;' || CHR(10) ||
             CHR(10) ||
-            '    -- start_date' || CHR(10) ||
-            '    IF d_start_date IS NULL THEN' || CHR(10) ||
-            '      IF l_start_date IS NOT NULL THEN' || CHR(10) ||
-            '        DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '      -- repeat_interval' || CHR(10) ||
+            '      IF d_repeat_interval IS NULL THEN' || CHR(10) ||
+            '        IF l_repeat_interval IS NOT NULL THEN' || CHR(10) ||
+            '          DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '            name      => ''' || j.job_name || ''',' || CHR(10) ||
+            '            attribute => ''repeat_interval''' || CHR(10) ||
+            '          );' || CHR(10) ||
+            '        END IF;' || CHR(10) ||
+            '      ELSIF NVL(l_repeat_interval,''#'') <> NVL(d_repeat_interval,''#'') THEN' || CHR(10) ||
+            '        DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
             '          name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '          attribute => ''start_date''' || CHR(10) ||
+            '          attribute => ''repeat_interval'',' || CHR(10) ||
+            '          value     => d_repeat_interval' || CHR(10) ||
             '        );' || CHR(10) ||
             '      END IF;' || CHR(10) ||
-            '    ELSIF l_start_date IS NULL OR l_start_date <> d_start_date THEN' || CHR(10) ||
-            '      DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
-            '        name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '        attribute => ''start_date'',' || CHR(10) ||
-            '        value     => d_start_date' || CHR(10) ||
-            '      );' || CHR(10) ||
-            '    END IF;' || CHR(10) ||
             CHR(10) ||
-            '    -- comments' || CHR(10) ||
-            '    IF d_comments IS NULL THEN' || CHR(10) ||
-            '      IF l_comments IS NOT NULL THEN' || CHR(10) ||
-            '        DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '      -- start_date' || CHR(10) ||
+            '      IF d_start_date IS NULL THEN' || CHR(10) ||
+            '        IF l_start_date IS NOT NULL THEN' || CHR(10) ||
+            '          DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '            name      => ''' || j.job_name || ''',' || CHR(10) ||
+            '            attribute => ''start_date''' || CHR(10) ||
+            '          );' || CHR(10) ||
+            '        END IF;' || CHR(10) ||
+            '      ELSIF l_start_date IS NULL OR l_start_date <> d_start_date THEN' || CHR(10) ||
+            '        DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
             '          name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '          attribute => ''comments''' || CHR(10) ||
+            '          attribute => ''start_date'',' || CHR(10) ||
+            '          value     => d_start_date' || CHR(10) ||
             '        );' || CHR(10) ||
             '      END IF;' || CHR(10) ||
-            '    ELSIF NVL(l_comments,''#'') <> NVL(d_comments,''#'') THEN' || CHR(10) ||
+            CHR(10) ||
+            '      -- comments' || CHR(10) ||
+            '      IF d_comments IS NULL THEN' || CHR(10) ||
+            '        IF l_comments IS NOT NULL THEN' || CHR(10) ||
+            '          DBMS_SCHEDULER.SET_ATTRIBUTE_NULL(' || CHR(10) ||
+            '            name      => ''' || j.job_name || ''',' || CHR(10) ||
+            '            attribute => ''comments''' || CHR(10) ||
+            '          );' || CHR(10) ||
+            '        END IF;' || CHR(10) ||
+            '      ELSIF NVL(l_comments,''#'') <> NVL(d_comments,''#'') THEN' || CHR(10) ||
+            '        DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
+            '          name      => ''' || j.job_name || ''',' || CHR(10) ||
+            '          attribute => ''comments'',' || CHR(10) ||
+            '          value     => d_comments' || CHR(10) ||
+            '        );' || CHR(10) ||
+            '      END IF;' || CHR(10) ||
+            CHR(10) ||
+            '      -- auto_drop (you force FALSE everywhere)' || CHR(10) ||
             '      DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
             '        name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '        attribute => ''comments'',' || CHR(10) ||
-            '        value     => d_comments' || CHR(10) ||
+            '        attribute => ''auto_drop'',' || CHR(10) ||
+            '        value     => FALSE' || CHR(10) ||
             '      );' || CHR(10) ||
-            '    END IF;' || CHR(10) ||
             CHR(10) ||
-            '    -- auto_drop (you force FALSE everywhere)' || CHR(10) ||
-            '    DBMS_SCHEDULER.SET_ATTRIBUTE(' || CHR(10) ||
-            '      name      => ''' || j.job_name || ''',' || CHR(10) ||
-            '      attribute => ''auto_drop'',' || CHR(10) ||
-            '      value     => FALSE' || CHR(10) ||
-            '    );' || CHR(10) ||
-            CHR(10) ||
-            '    -- Enable/disable per policy' || CHR(10) ||
-            '    IF NVL(l_target_enabled, ''FALSE'') = ''TRUE'' THEN' || CHR(10) ||
-            '      DBMS_SCHEDULER.ENABLE(''' || j.job_name || ''');' || CHR(10) ||
+            '      -- Enable/disable per policy' || CHR(10) ||
+            '      IF NVL(l_target_enabled, ''FALSE'') = ''TRUE'' THEN' || CHR(10) ||
+            '        DBMS_SCHEDULER.ENABLE(''' || j.job_name || ''');' || CHR(10) ||
+            '      END IF;' || CHR(10) ||
             '    END IF;' || CHR(10) ||
             CHR(10) ||
             '  ELSE' || CHR(10) ||
