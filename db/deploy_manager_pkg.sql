@@ -522,6 +522,33 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
   END;
 
   ------------------------------------------------------------------------------
+  -- APP_CONFIG helper (no compile-time dependency)
+  ------------------------------------------------------------------------------
+  FUNCTION get_app_config_value(p_key IN VARCHAR2) RETURN VARCHAR2 IS
+    l_val VARCHAR2(32767);
+  BEGIN
+    -- dynamic SQL avoids compile-time dependency on APP_CONFIG
+    EXECUTE IMMEDIATE
+      'SELECT config_value FROM app_config WHERE config_key = :1'
+      INTO l_val
+      USING p_key;
+
+    RETURN l_val;
+
+  EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+      RETURN NULL;
+
+    WHEN OTHERS THEN
+      -- If APP_CONFIG doesn't exist (ORA-00942), or any other issue, return NULL.
+      -- (You can optionally log if deploy_runs exists, but keep this simple.)
+      IF SQLCODE = -942 THEN
+        RETURN NULL;
+      END IF;
+      RETURN NULL;
+  END get_app_config_value;
+
+  ------------------------------------------------------------------------------
   -- APP_CONFIG seed export (selected keys -> MERGE statements)
   ------------------------------------------------------------------------------
   FUNCTION export_app_config RETURN CLOB IS
@@ -642,7 +669,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
 
         DBMS_LOB.APPEND(
           l_out,
-            'MERGE INTO oci_focus_reports.app_config c' || CHR(10) ||
+            'MERGE INTO app_config c' || CHR(10) ||
             'USING (SELECT ''' ||
                 REPLACE(l_key_v, '''', '''''') || ''' config_key, ' ||
                 NVL(l_expr, 'CAST(NULL AS VARCHAR2(32767))') ||
@@ -671,8 +698,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
   ----------------------------------------------------------------------------
   FUNCTION export_chatbot_seed RETURN CLOB IS
     l_out     CLOB := EMPTY_CLOB();
-    l_schema  VARCHAR2(128);
-
     --------------------------------------------------------------------------
     -- Quoting helpers (same semantics as your current ones)
     --------------------------------------------------------------------------
@@ -729,8 +754,6 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
 
   BEGIN
     DBMS_LOB.CREATETEMPORARY(l_out, TRUE);
-    SELECT SYS_CONTEXT('USERENV', 'CURRENT_SCHEMA') INTO l_schema FROM dual;
-
     append_line('/* Seed data for CHATBOT_* tables exported from source environment. */');
     append_line('/* Tables: CHATBOT_PARAMETERS, CHATBOT_PARAMETER_COMPONENT, CHATBOT_GLOSSARY_RULES, CHATBOT_GLOSSARY_KEYWORDS */');
     append_line('');
@@ -786,7 +809,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
           DBMS_SQL.COLUMN_VALUE(c, 7, v_en);
 
           append(
-            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETERS t' || CHR(10) ||
+            'MERGE INTO CHATBOT_PARAMETERS t' || CHR(10) ||
             'USING (' || CHR(10) ||
             '  SELECT ' || TO_CHAR(v_id) || ' AS ID,' || CHR(10) ||
             '         ' || q(v_ct)       || ' AS COMPONENT_TYPE,' || CHR(10) ||
@@ -856,7 +879,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
           DBMS_SQL.COLUMN_VALUE(c, 2, v_ct);
 
           append(
-            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_PARAMETER_COMPONENT t' || CHR(10) ||
+            'MERGE INTO CHATBOT_PARAMETER_COMPONENT t' || CHR(10) ||
             'USING (' || CHR(10) ||
             '  SELECT ' || TO_CHAR(v_id) || ' AS ID,' || CHR(10) ||
             '         ' || q(v_ct)       || ' AS COMPONENT_TYPE' || CHR(10) ||
@@ -965,7 +988,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
           DBMS_SQL.COLUMN_VALUE(c, 17, v_updatedby);
 
           append(
-            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_RULES t' || CHR(10) ||
+            'MERGE INTO CHATBOT_GLOSSARY_RULES t' || CHR(10) ||
             'USING (' || CHR(10) ||
             '  SELECT ' || TO_CHAR(v_id)         || ' AS ID,' || CHR(10) ||
             '         ' || q(v_dataset)          || ' AS DATASET,' || CHR(10) ||
@@ -1073,7 +1096,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
           DBMS_SQL.COLUMN_VALUE(c, 3, v_kw);
 
           append(
-            'MERGE INTO ' || LOWER(l_schema) || '.CHATBOT_GLOSSARY_KEYWORDS t' || CHR(10) ||
+            'MERGE INTO CHATBOT_GLOSSARY_KEYWORDS t' || CHR(10) ||
             'USING (' || CHR(10) ||
             '  SELECT ' || TO_CHAR(v_rule) || ' AS RULE_ID,' || CHR(10) ||
             '         ' || TO_CHAR(v_ord)  || ' AS ORD,' || CHR(10) ||
@@ -2100,15 +2123,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         l_scheme_name  varchar2(255);
         l_ws_id        number;
       BEGIN
-        BEGIN
-          SELECT config_value
-            INTO l_scheme_name
-            FROM app_config
-          WHERE config_key = 'l_auth_scheme_name';
-        EXCEPTION
-          WHEN no_data_found THEN
-            l_scheme_name := NULL;
-        END;
+        l_scheme_name := get_app_config_value('l_auth_scheme_name');
 
         -- Set workspace context (safe to do even if l_scheme_name is null)
         l_ws_id := apex_util.find_security_group_id(p_workspace => 'OCI_FOCUS_REPORTS');
@@ -2140,15 +2155,8 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         l_oidc_url     varchar2(4000);
         l_disc_attr    varchar2(4000);
       BEGIN
-        BEGIN
-          SELECT config_value
-            INTO l_scheme_name
-            FROM app_config
-          WHERE config_key = 'l_auth_scheme_name';
-        EXCEPTION
-          WHEN no_data_found THEN
-            l_scheme_name := NULL;
-        END;
+        l_scheme_name := get_app_config_value('l_auth_scheme_name');
+
 
         IF l_scheme_name IS NULL THEN
           run_log(p_run_id, 'POST-IMPORT: no l_auth_scheme_name in APP_CONFIG; skipping auth enforcement/verification.');
@@ -2196,15 +2204,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         ----------------------------------------------------------------
         IF upper(l_scheme_name) = upper('OCI SSO') THEN
           -- Log whether APP_CONFIG has URL (null allowed)
-          BEGIN
-            SELECT config_value
-              INTO l_oidc_url
-              FROM app_config
-            WHERE config_key = 'OIDC_DISCOVERY_URL';
-          EXCEPTION
-            WHEN no_data_found THEN
-              l_oidc_url := NULL;
-          END;
+          l_oidc_url := get_app_config_value('OIDC_DISCOVERY_URL');
 
           IF l_oidc_url IS NULL THEN
             run_log(p_run_id, 'WARN: OIDC_DISCOVERY_URL missing/NULL in APP_CONFIG. Deployment continues; may require manual config.');

@@ -81,12 +81,23 @@ Connect as the application schema owner and run:
 
 ### Step 2 — Insert bundle ZIP
 Insert the bundle ZIP into the Deployment Manager bundle table
-(e.g. `DEPLOY_BUNDLES`) and capture the generated `BUNDLE_ID`.
+(`DEPLOY_BUNDLES`) and capture the generated `BUNDLE_ID`. You must use SQL Developer or equivelant client to upload the zip file as BLOB to the database.
+
+MANIFSET_JSON example:
+``` json
+{
+  "app_id": 1200,
+  "version": "v20260109_134227",
+  "schema": "ORDS_PLSQL_GATEWAY",
+  "created_at": "2026-01-09T13:42:30.742+00:00",
+  "notes": "Credentials are not exported; ensure required credentials exist per environment."
+}
+```
 
 ---
 
 ### Step 3 — Deploy (scheduled job only)
-Initial deployment is performed **via scheduler job**, not synchronously.
+Initial deployment is performed **via scheduler job**, not synchronously. BUNDLE_ID is the chosen ID during upload in Step 2
 
 ```sql
 DECLARE
