@@ -98,11 +98,11 @@ MANIFSET_JSON example:
 
 ### Step 3 — Deploy (scheduled job only)
 Initial deployment is performed **via scheduler job**, not synchronously. 
-- `BUNDLE_ID` - is the chosen ID during upload in Step 2
-- `INITIAL` - for new installations
-- `YOUR_WORKSPACE` - APEX target workspace name
-- `APP_ID` - target APEX id (default is 1200)
-- `ALLOW_OVERWRITE` - If target APP_ID already exists in target APEX <b><u>Instance</u></b> it will overwrite it. <u>Make sure no application with the same ID exists on the same APEX instance</u>
+- <b style="color: #ff7b72;">BUNDLE_ID</b> - is the chosen ID during upload in Step 2
+- <b style="color: #ff7b72;">INITIAL</b> - for new installations
+- <b style="color: #ff7b72;">YOUR_WORKSPACE</b> - APEX target workspace name
+- <b style="color: #ff7b72;">APP_ID</b> - target APEX id (default is 1200)
+- <b style="color: #ff7b72;">ALLOW_OVERWRITE</b> - If target APP_ID already exists in target APEX <b><u>Instance</u></b> it will overwrite it. <u>Make sure no application with the same ID exists on the same APEX instance</u>
 
 
 ```sql
