@@ -139,11 +139,11 @@ EOF
 
 ### Step 3 — Deploy (scheduled job only)
 Initial deployment is performed **via scheduler job**, not synchronously. 
-- $\color{#ff7b72}{\textsf{BUNDLE\_ID}}$ - Is the chosen ID during upload in Step 2
+- $\color{#ff7b72}{\textsf{BUNDLE ID}}$ - Is the chosen ID during upload in Step 2
 - $\color{#ff7b72}{\textsf{INITIAL}}$ - for new installations
-- $\color{#ff7b72}{\textsf{YOUR\_WORKSPACE}}$ - APEX target workspace name
-- $\color{#ff7b72}{\textsf{APP\_ID}}$ - target APEX id (default is 1200)
-- $\color{#ff7b72}{\textsf{ALLOW\_OVERWRITE}}$ - If target APP_ID already exists in target APEX <b><u>Instance</u></b> it will overwrite it. <u>Make sure no application with the same ID exists on the same APEX instance</u>
+- $\color{#ff7b72}{\textsf{YOUR WORKSPACE}}$ - APEX target workspace name
+- $\color{#ff7b72}{\textsf{APP ID}}$ - target APEX id (default is 1200)
+- $\color{#ff7b72}{\textsf{ALLOW OVERWRITE}}$ - If target APP_ID already exists in target APEX <b><u>Instance</u></b> it will overwrite it. <u>Make sure no application with the same ID exists on the same APEX instance</u>
 - $\color{#ff7b72}{\textsf{AUTH SCHEME NAME}}$ - target APP's authentication scheme. APEX's default is $\color{#f7ee78}{\textsf{'Oracle APEX Accounts'}}$ . A 2nd option is $\color{#a5d6ff}{\textsf{'OCI SSO'}}$ but that requires configuring the workspace/app with OAuth for external authentication. Check below for an example of integrating Oracle APEX with OCI IAM domains:
 https://docs.oracle.com/en/learn/apex-identitydomains-sso/index.html
 
