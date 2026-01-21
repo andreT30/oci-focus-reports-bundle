@@ -2237,6 +2237,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/02_sequences.sql',     p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/10_indexes.sql',  p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/03_constraints.sql',   p_dry_run => p_dry_run);
+    run_script_from_zip(p_run_id, l_zip, 'db/ddl/03a_views.sql',   p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/04_pkg_specs.sql',     p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/05_contexts.sql',      p_dry_run => p_dry_run);
     run_script_from_zip(p_run_id, l_zip, 'db/ddl/06_pkg_bodies.sql',    p_dry_run => p_dry_run);
@@ -2279,10 +2280,25 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
       BEGIN
         resolve_apex_target(p_run_id, l_ws_name, l_app_id);
 
-        l_ws_id := apex_util.find_security_group_id(p_workspace => l_ws_name);
-        apex_util.set_security_group_id(l_ws_id);
+        l_ws_name := TRIM(l_ws_name);
 
+        run_log(p_run_id, 'APEX target: workspace="'||l_ws_name||'", app_id='||l_app_id);
+
+        l_ws_id := apex_util.find_security_group_id(p_workspace => l_ws_name);
+
+        run_log(p_run_id, 'APEX resolved workspace_id='||NVL(TO_CHAR(l_ws_id),'NULL'));
+
+        IF l_ws_id IS NULL OR l_ws_id = 0 THEN
+          raise_application_error(
+            -20030,
+            'APEX workspace not found by apex_util.find_security_group_id for workspace="'||
+            l_ws_name||'". Check APP_CONFIG.APEX_WORKSPACE_NAME for whitespace/mismatch.'
+          );
+        END IF;
+
+        apex_util.set_security_group_id(l_ws_id);
         apex_application_install.set_workspace_id(l_ws_id);
+
         apex_application_install.set_schema(USER);
         apex_application_install.set_application_id(l_app_id);
 
