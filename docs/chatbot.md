@@ -222,19 +222,23 @@ Glossary Rule Editor
 ![Glossary Rule Editor](/screenshots/chatbot_params1.png)
 
 Create Glossary Rule 
-![Keyword Mapping](/screenshots/chatbot_params2.png)
+![Create Glossary Rule](/screenshots/chatbot_params2.png)
 
 Update Glossary Rule 
-![Keyword Mapping](/screenshots/chatbot_params4.png)
+![Update Glossary Rule](/screenshots/chatbot_params4.png)
 
 Create Glossary Keyword 
-![Keyword Mapping](/screenshots/chatbot_params3.png)
+![Create Glossary Keyword](/screenshots/chatbot_params3.png)
 
 Create Workload Rule 
-![Keyword Mapping](/screenshots/chatbot_params5.png)
+![Create Workload Rule](/screenshots/chatbot_params5.png)
 
 Keyword Tester
-![Keyword Mapping](/screenshots/chatbot_params6.png)
+![Keyword Tester](/screenshots/chatbot_params6.png)
+
+Examples
+![Example1](/screenshots/chatbot_params7.png)
+![Example2](/screenshots/chatbot_params8.png)
 
 ---
 
