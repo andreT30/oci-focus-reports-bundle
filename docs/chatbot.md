@@ -218,7 +218,8 @@ Rules are maintained using APEX admin pages.
 
 Screenshot placeholders:
 
-Glossary Rule Editor  
+Glossary Rule Editor
+<img src="/screenshots/chatbot_params1.png" width="1200">
 ![Glossary Rule Editor](/screenshots/chatbot_params1.png)
 
 Create Glossary Rule 
@@ -228,6 +229,7 @@ Update Glossary Rule
 ![Update Glossary Rule](/screenshots/chatbot_params4.png)
 
 Create Glossary Keyword 
+<img src="/screenshots/chatbot_params3.png" width="1200">
 ![Create Glossary Keyword](/screenshots/chatbot_params3.png)
 
 Create Workload Rule 
