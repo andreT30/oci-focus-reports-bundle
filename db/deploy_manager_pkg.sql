@@ -2629,7 +2629,7 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         job_name            => l_job_name,
         job_type            => 'STORED_PROCEDURE',
         job_action          => 'DEPLOY_MGR_PKG.DEPLOY_WORKER',
-        number_of_arguments => 9,
+        number_of_arguments => 10,
         enabled             => FALSE,
         auto_drop           => TRUE
       );
@@ -2646,7 +2646,8 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
       DBMS_SCHEDULER.SET_JOB_ARGUMENT_VALUE(l_job_name, 7, CASE WHEN p_app_id IS NULL THEN NULL ELSE TO_CHAR(p_app_id) END);
 
       DBMS_SCHEDULER.SET_JOB_ARGUMENT_VALUE(l_job_name, 8, NVL(p_allow_overwrite,'N'));
-      DBMS_SCHEDULER.SET_JOB_ARGUMENT_VALUE(l_job_name, 9, NVL(p_auth_scheme_name,'Oracle APEX Accounts'));
+      DBMS_SCHEDULER.SET_JOB_ARGUMENT_VALUE(l_job_name, 9, NVL(p_use_id_offset,'N'));
+      DBMS_SCHEDULER.SET_JOB_ARGUMENT_VALUE(l_job_name, 10, NVL(p_auth_scheme_name,'Oracle APEX Accounts'));
 
       DBMS_SCHEDULER.ENABLE(l_job_name);
 
