@@ -2,86 +2,24 @@
 
 Home: [README](../README.md) · **Docs** · **Deployment**
 
-## Overview
+This document describes **initial installation** of the application bundle into an Autonomous Database / APEX workspace.
 
-This application is deployed using a **database-resident Deployment Manager**
-implemented in PL/SQL (`DEPLOY_MGR_PKG`).
-
-The Deployment Manager consumes the **application bundle ZIP as a ZIP (stored as a BLOB)** and applies
-its contents directly—**no manual extraction is required or expected**.
-
-This document covers **initial deployment only**.
-Application updates are handled **inside the application itself** and are documented separately.
+Updates after the first install are performed **in-app**. See [Update](update.md).
 
 ---
 
-## Deployment Components
+## How deployment works (1 minute)
+Deployment is performed by a database-resident **Deployment Manager** implemented in PL/SQL (`DEPLOY_MGR_PKG`).
 
-### 1. Admin prerequisite script (mandatory)
-**File:** `ov_run_as_admin.sql`  
-**Executed as:** Autonomous Database ADMIN (or equivalent privileged user)
-
-Purpose:
-- grant required system and object privileges
-- enable scheduler, APEX import, and DBMS package access
-
-This script must be executed **before the first deployment** in each environment.
+- You upload a **bundle ZIP** into the database (stored as a BLOB)
+- The Deployment Manager applies its contents directly (no manual ZIP extraction)
+- Every deployment creates a **run record** and detailed logs for auditability
 
 ---
 
-### 2. Deployment Manager installation (application schema)
+## What’s in a bundle
+A bundle is a ZIP with a manifest and install scripts. Example manifest:
 
-The Deployment Manager is installed in the **application schema** using:
-
-- `deploy_manager_ddl.sql`
-- `deploy_manager_pkg.sql`
-
-Run as the application schema owner:
-
-@deploy_manager_ddl.sql  
-@deploy_manager_pkg.sql
-
-These scripts create:
-- bundle storage tables (ZIP stored as BLOB)
-- deployment run and log tables
-- the `DEPLOY_MGR_PKG` API
-
----
-
-## Bundle ZIP
-
-The bundle ZIP is the **single deployment artifact**.
-
-Typical contents:
-- `db/ddl/*.sql` — database objects (tables, views, packages, procedures)
-- `db/ddl/90_jobs.sql` — scheduler jobs created as part of the application
-- `apex/f1200.sql` — Oracle APEX application export
-- `manifest.json` — bundle metadata
-
-The Deployment Manager reads and processes these entries **directly from the ZIP**.
-
----
-
-## Deployment Procedure (Target ADB)
-
-### Step 0 — Run admin script
-Connect as ADMIN and run:
-
-@ov_run_as_admin.sql
-
----
-
-### Step 1 — Install Deployment Manager
-Connect as the application schema owner and run:
-
-@deploy_manager_ddl.sql  
-@deploy_manager_pkg.sql
-
----
-
-### Step 2 — Upload bundle ZIP
-
-MANIFSET_JSON example:
 ``` json
 {
   "app_id": 1200,
@@ -92,12 +30,39 @@ MANIFSET_JSON example:
 }
 ```
 
-#### - SQL Developer 
-Insert the bundle ZIP into the Deployment Manager bundle table
-(`DEPLOY_BUNDLES`) and capture the generated `BUNDLE_ID`.
+> Note: credentials and environment-specific values are intentionally **not** exported.  
+> Each environment must provide its own configuration and OCI/IAM setup.
 
-#### - SQLcl (either installed locally or as part of SQL Developer in VSCode)
-Create the below script locally:
+---
+
+## Prerequisites
+Before running an initial deployment, confirm:
+- [Infrastructure Requirements](infra-requirements.md) are met
+- You have a target APEX workspace and know its name
+- You have the application bundle ZIP ready to upload
+
+---
+
+## Step 1 — Run the admin prerequisite script (mandatory)
+**Script:** `ov_run_as_admin.sql`  
+**Run as:** `ADMIN` (or an equivalent privileged user)
+
+Purpose (high level):
+- grants required privileges
+- enables required packages (scheduler, APEX APIs, DBMS_CLOUD, etc.)
+- prepares the environment for import
+
+---
+
+## Step 2 — Upload the bundle ZIP into `DEPLOY_BUNDLES`
+Upload the ZIP as a BLOB (method depends on your tooling).  
+Once uploaded, you should have a `BUNDLE_ID` to deploy.
+
+---
+
+## Step 3 — Deploy (INITIAL mode)
+Call the Deployment Manager in **INITIAL** mode. Example:
+
 ```sql
 INSERT INTO deploy_bundles (
     app_id,
@@ -116,11 +81,8 @@ VALUES (
 RETURNING bundle_zip INTO :blob;
 ```
 
-Launch SQLcl inside the same directory as the script above .
-Version Tag, check github version update.
-Manifest JSON, check example above and update accordingly.
+If you want to allow overwriting an existing app (only for controlled scenarios), use the overwrite flag:
 
-Sample execution:
 ```sql
 sql demo_user/demo_pwd@db_high <<EOF
 VAR blob BLOB
@@ -134,20 +96,7 @@ COMMIT
 EOF
 ```
 
-
----
-
-### Step 3 — Deploy (scheduled job only)
-Initial deployment is performed **via scheduler job**, not synchronously. 
-- $\color{#ff7b72}{\textsf{BUNDLE ID}}$ - Is the chosen ID during upload in Step 2
-- $\color{#ff7b72}{\textsf{INITIAL}}$ - for new installations
-- $\color{#ff7b72}{\textsf{YOUR WORKSPACE}}$ - APEX target workspace name
-- $\color{#ff7b72}{\textsf{APP ID}}$ - target APEX id (default is 1200)
-- $\color{#ff7b72}{\textsf{USE ID OFFSET}}$ - in cases where this APP is already installed at least once under the same APEX Instance, you must set it to 'Y' to avoid conflict with existing APEX app components. If this is the first and only app installation, set it to 'N'.
-- $\color{#ff7b72}{\textsf{ALLOW OVERWRITE}}$ - If target APP_ID already exists in target APEX <b><u>Instance</u></b> it will overwrite it. <u>Make sure this is correct!</u>
-- $\color{#ff7b72}{\textsf{AUTH SCHEME NAME}}$ - target APP's authentication scheme. APEX's default is $\color{#f7ee78}{\textsf{'Oracle APEX Accounts'}}$ . A 2nd option is $\color{#a5d6ff}{\textsf{'OCI SSO'}}$ but that requires configuring the workspace/app with OAuth for external authentication. Check below for an example of integrating Oracle APEX with OCI IAM domains:
-https://docs.oracle.com/en/learn/apex-identitydomains-sso/index.html
-
+If you are installing into a new workspace or need APEX ID offsetting, use the offset option:
 
 ```sql
 DECLARE
@@ -171,54 +120,25 @@ END;
 
 ---
 
-### Step 4 — Monitor
-Connect as the application schema owner and run the below queries:
-- ```SELECT * FROM deploy_runs ORDER BY run_id DESC;```
-- ```SELECT * FROM deploy_applied ORDER BY applied_at DESC;```
+## Step 4 — Validate the deployment
+Check the deployment run and applied components:
+
+```SELECT * FROM deploy_runs ORDER BY run_id DESC;```
+
+```SELECT * FROM deploy_applied ORDER BY applied_at DESC;```
+
+Recommended validation checks:
+- app opens successfully in APEX
+- home dashboard renders (even if data is empty initially)
+- background jobs are created (enabled/disabled per your chosen settings)
+- `APP_CONFIG` rows exist for the application
 
 ---
 
-### Step 5 — Validate
-After the job completes:
-- open the APEX application
-- verify core pages load
-- verify chatbot initializes
-- verify required `APP_CONFIG` entries exist
+## After installation
+Next steps are typically:
+1. Complete environment configuration in [Configuration](configuration.md)
+2. Enable and monitor scheduled refresh jobs in [Administration & Operations](admin-guide.md)
+3. If using the chatbot, verify GenAI permissions and chatbot parameters in [NL2SQL Chatbot](chatbot.md)
 
 ---
-
-### Step 6 — Enable jobs
-Jobs defined in `db/ddl/90_jobs.sql` are created **disabled**.
-
-Enable them only after:
-- configuration is verified
-- initial validation is complete
-
----
-
-## Logging & Observability
-
-Each deployment is tracked via deployment run tables:
-- run id
-- status
-- timestamps
-- detailed execution log (CLOB)
-
-Deployment issues should always be investigated via these logs.
-
----
-
-## What this document does NOT cover
-
-- Application updates
-- In-app self-update flows
-- Dry-run update behavior
-- Bundle export
-
-These topics are documented separately in [Update Guide](update.md).
-
-**See also**
-- [Update Guide](update.md)
-- [Admin Guide](admin-guide.md)
-- [Deployment Manager API](deploy-manager-api.md)
-- [Troubleshooting](troubleshooting.md)

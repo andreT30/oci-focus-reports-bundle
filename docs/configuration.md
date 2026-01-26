@@ -2,144 +2,53 @@
 
 Home: [README](../README.md) · **Docs** · **Configuration**
 
-## Overview
-The application is configured entirely through **database tables**, primarily `APP_CONFIG`.
+The application is configured through database tables (primarily `APP_CONFIG`).  
+No OCIDs, tag names, or environment-specific values are hardcoded in source code.
 
-There are:
-- no hardcoded OCIDs
-- no hardcoded tag names
-- no environment-specific values in code
-
-This makes the system portable across:
-- DEV / TEST / PROD
-- different OCI tenancies
-- different tagging conventions
+Use this document as the “what to configure” overview.  
+For the full parameter reference, see [Application Configuration (APP_CONFIG)](app-config.md).
 
 ---
 
-## Configuration Principles
+## Configuration layers
 
-- Configuration is **read at runtime**
-- Keys are stable; values vary by environment
-- Missing or incorrect config causes visible, logged failures
-- Secrets must be injected externally (never committed)
+### 1) `APP_CONFIG` (primary)
+Controls runtime behavior such as:
+- tenancy/compartment scope
+- cost/usage ingestion settings
+- refresh cadence and date defaults
+- UI feature flags
+- chatbot enablement and limits
 
----
+### 2) Chatbot metadata (if chatbot is enabled)
+Stored in dedicated tables (glossary rules, hints, and parameters). See:
+- [NL2SQL Chatbot](chatbot.md)
 
-## APP_CONFIG Table
-
-### Purpose
-Centralized key-value configuration store.
-
-### Typical Columns
-- `CONFIG_KEY`
-- `CONFIG_VALUE`
-- optional description / category
-
----
-
-## Configuration Categories
-
-### 1. OCI Environment
-
-Controls how the application connects to OCI data.
-
-**Examples**
-- root compartment identifiers
-- region lists
-- tenancy scope
-
-These define **what data is visible** to the app.
+### 3) Scheduler jobs
+Operational refresh jobs are created during deployment and can be enabled/disabled per environment. See:
+- [Administration & Operations](admin-guide.md)
 
 ---
 
-### 2. Tag Mapping & Attribution
-
-Defines how OCI tags are interpreted.
-
-**Examples**
-- cost center tag key
-- environment tag key
-- implementor / owner tag key
-
-These values are used dynamically to extract tag data from JSON.
+## Typical post-install configuration flow
+1. Populate required `APP_CONFIG` keys (tenancy/compartment IDs, namespaces, etc.).
+2. Decide whether the chatbot is enabled in this environment.
+3. Enable refresh jobs (or run manual refresh once).
+4. Validate dashboards and confirm data freshness.
+5. Review [Security & Trust Model](security.md) and ensure IAM policies match your scope.
 
 ---
 
-### 3. Analytics Behavior
-
-Controls how analytics behave.
-
-**Examples**
-- default date ranges
-- normalization rules
-- feature toggles for dashboards
+## Portability guidance
+To keep environments consistent:
+- treat `APP_CONFIG` as the only place for environment values
+- avoid changing core views/packages unless you are maintaining a fork
+- export/import bundles for upgrades instead of manual patching
 
 ---
 
-### 4. Chatbot Configuration
-
-Controls NL2SQL behavior.
-
-**Examples**
-- model identifiers
-- routing behavior
-- execution limits
-- verbosity of summaries
-
-This allows chatbot tuning **without code changes**.
-
----
-
-### 5. Application Behavior
-
-General application settings.
-
-**Examples**
-- UI defaults
-- feature flags
-- environment labels
-
----
-
-## Environment-Specific Values
-
-Typical environment-specific values:
-- OCI compartment OCIDs
-- region lists
-- tagging conventions
-- enabled jobs
-
-These should be:
-- set post-deployment
-- excluded or anonymized in GitHub
-
----
-
-## Configuration Deployment Strategy
-
-Recommended:
-1. Deploy schema objects
-2. Insert baseline config keys (no secrets)
-3. Override values per environment
-4. Validate via health checks
-
----
-
-## Validation & Troubleshooting
-
-Misconfiguration usually manifests as:
-- empty dashboards
-- chatbot returning no results
-- job failures
-
-Check:
-- APP_CONFIG values
-- logging tables
-- job run logs
-
-Details: [troubleshooting.md](troubleshooting.md)
-
-**See also**
-- [Admin Guide](admin-guide.md)
-- [Deployment Guide](deployment.md)
+## Related documents
+- [Infrastructure Requirements](infra-requirements.md)
+- [Deployment](deployment.md)
+- [Application Configuration (APP_CONFIG)](app-config.md)
+- [Administration & Operations](admin-guide.md)

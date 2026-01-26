@@ -1,17 +1,21 @@
-# Deployment Manager API (DEPLOY_MGR_PKG)
+# Deployment Manager API (`DEPLOY_MGR_PKG`)
 
 Home: [README](../README.md) · **Docs** · **Deployment Manager API**
 
-This document describes the **supported Deployment Manager API surface**
-intended for operational use.
+This document summarizes the **operational** API surface of the Deployment Manager.
+It focuses on the calls you typically need for:
+- exporting a backup bundle
+- deploying a bundle (initial install or update automation)
 
-Only the APIs required for **export** and **import (deployment)** are documented here.
+For the UI-based flows, see:
+- [Backup / Export](backup-export.md)
+- [Deployment](deployment.md)
+- [Update](update.md)
 
 ---
 
-## Export Bundle
-
-Exports the current application state into a new bundle ZIP stored in the database.
+## Export bundle
+Exports the current installation into a new bundle ZIP stored in the database.
 
 ```sql
 FUNCTION export_bundle(
@@ -21,7 +25,8 @@ FUNCTION export_bundle(
 ) RETURN NUMBER;
 ```
 
-### Example
+Example:
+
 ```sql
 DECLARE
   l_bundle_id NUMBER;
@@ -39,9 +44,8 @@ END;
 
 ---
 
-## Import / Deploy Bundle (scheduled job only)
-
-Deployment is performed **as a scheduler job**.
+## Deploy bundle
+Applies a bundle ZIP already stored as a BLOB in `DEPLOY_BUNDLES`.
 
 ```sql
 PROCEDURE enqueue_deploy(
@@ -53,7 +57,8 @@ PROCEDURE enqueue_deploy(
 );
 ```
 
-### Example
+Example:
+
 ```sql
 DECLARE
   l_run_id   NUMBER;
@@ -75,12 +80,5 @@ END;
 ---
 
 ## Notes
-
-- Synchronous deploy APIs are intentionally not documented.
-- `p_dry_run` is intended for **update scenarios only**.
-- Scheduler jobs defined in `db/ddl/90_jobs.sql` are created disabled by default.
-- Deployment status and logs must be checked via deployment run tables or admin UI.
-
-**See also**
-- [Deployment Guide](deployment.md)
-- [Update Guide](update.md)
+- Bundle export/import is designed to be environment-portable.
+- Credentials and environment-specific identifiers are not exported.

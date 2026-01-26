@@ -1,21 +1,27 @@
-# Application Configuration Reference (APP_CONFIG)
+# Application Configuration (APP_CONFIG)
 
-Home: README · Docs · Application Configuration
+Home: [README](../README.md) · **Docs** · **Application Configuration**
 
----
+`APP_CONFIG` is the runtime configuration store for the application. The goal is simple:
+**the same bundle should run in different environments with only configuration changes**.
 
-## Purpose
-
-This document describes all application configuration parameters stored in the APP_CONFIG table.
-
-APP_CONFIG is the single source of truth for runtime behavior. No configuration values are hardcoded in application logic.
+This document is a reference for all keys found in `APP_CONFIG`.
 
 ---
 
-## APP_CONFIG Table Model
+## How to use this reference
+- Keys are **case-sensitive** in the sense that the application expects specific key names.
+- Values are stored as **strings**. Some values are interpreted as:
+  - booleans (`Y`/`N`)
+  - numbers
+  - JSON payloads (must be valid JSON)
+  - comma-separated lists
+- When changing configuration, prefer using the in-app admin pages so changes are logged and validated.
 
-- CONFIG_KEY: Unique identifier for the configuration parameter.
-- CONFIG_VALUE: String-based value interpreted by usage context.
+### Recommended change process
+1. Change one key at a time.
+2. Validate the relevant dashboard/job behavior.
+3. Keep a small record of “why” for non-obvious changes (ticket / change request reference).
 
 ---
 

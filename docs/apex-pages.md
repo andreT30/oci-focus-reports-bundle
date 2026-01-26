@@ -2,9 +2,12 @@
 
 Home: [README](../README.md) · **Docs** · **APEX Pages Map**
 
-This document maps Oracle APEX pages to functional documentation so users (and admins) can understand where to go in the app and what each page does.
+This page maps Oracle APEX pages to functional areas so operators and contributors can quickly find:
+- where a feature lives in the UI
+- which pages are user-facing vs admin-only
+- which pages relate to deployment, configuration, jobs, and chatbot rules
 
-APEX App: **1200**
+If you are a first-time user, start with the [User Guide](usage-guide.md).
 
 ---
 
