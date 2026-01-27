@@ -1005,39 +1005,33 @@ create or replace PACKAGE BODY deploy_mgr_pkg AS
         c     INTEGER;
         rc    INTEGER;
 
-        v_id  NUMBER;
         v_ct  VARCHAR2(4000);
       BEGIN
         c := DBMS_SQL.OPEN_CURSOR;
         DBMS_SQL.PARSE(
           c,
-          'SELECT id, component_type FROM chatbot_parameter_component ORDER BY id',
+          'SELECT component_type FROM chatbot_parameter_component ORDER BY component_type',
           DBMS_SQL.NATIVE
         );
 
-        DBMS_SQL.DEFINE_COLUMN(c, 1, v_id);
-        DBMS_SQL.DEFINE_COLUMN(c, 2, v_ct, 4000);
+        DBMS_SQL.DEFINE_COLUMN(c, 1, v_ct, 4000);
 
         rc := DBMS_SQL.EXECUTE(c);
 
         WHILE DBMS_SQL.FETCH_ROWS(c) > 0 LOOP
-          DBMS_SQL.COLUMN_VALUE(c, 1, v_id);
-          DBMS_SQL.COLUMN_VALUE(c, 2, v_ct);
+          DBMS_SQL.COLUMN_VALUE(c, 1, v_ct);
 
           append(
             'MERGE INTO CHATBOT_PARAMETER_COMPONENT t' || CHR(10) ||
             'USING (' || CHR(10) ||
-            '  SELECT ' || TO_CHAR(v_id) || ' AS ID,' || CHR(10) ||
-            '         ' || q(v_ct)       || ' AS COMPONENT_TYPE' || CHR(10) ||
+            '  SELECT ' || q(v_ct) || ' AS COMPONENT_TYPE' || CHR(10) ||
             '  FROM dual' || CHR(10) ||
             ') s' || CHR(10) ||
-            'ON (t.ID = s.ID)' || CHR(10) ||
-            'WHEN MATCHED THEN UPDATE SET' || CHR(10) ||
-            '  t.COMPONENT_TYPE = s.COMPONENT_TYPE' || CHR(10) ||
+            'ON (t.COMPONENT_TYPE = s.COMPONENT_TYPE)' || CHR(10) ||
             'WHEN NOT MATCHED THEN INSERT (' || CHR(10) ||
-            '  ID, COMPONENT_TYPE' || CHR(10) ||
+            '  COMPONENT_TYPE' || CHR(10) ||
             ') VALUES (' || CHR(10) ||
-            '  s.ID, s.COMPONENT_TYPE' || CHR(10) ||
+            '  s.COMPONENT_TYPE' || CHR(10) ||
             ');' || CHR(10) || CHR(10)
           );
         END LOOP;
