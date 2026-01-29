@@ -198,9 +198,9 @@ See:  [Update Guide](docs/update.md)
 
 All application scheduler jobs are defined in:
 
-===
+```
 db/ddl/90_jobs.sql
-===
+```
 
 Behavior:
 - Jobs are created **disabled** during deployment
@@ -251,7 +251,7 @@ See:  [Security Model](docs/security.md)
 
 ## Repository structure
 
-===
+```
 bundle_app1200.zip         # The zip that contains all the application assets
 
 db/
@@ -273,7 +273,7 @@ docs/
   security.md
   deploy-manager-api.md
   diagrams/
-===
+```
 
 ---
 

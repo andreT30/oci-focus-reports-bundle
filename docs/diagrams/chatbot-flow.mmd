@@ -1,0 +1,21 @@
+flowchart TD
+  Q[User Question] --> NORM[Normalize & Tokenize]
+
+  NORM --> ROUTER[Intent Router]
+
+  ROUTER --> GLOSS[Glossary Rules]
+  ROUTER --> META[Dataset Metadata]
+
+  GLOSS --> SQLGEN[SQL Generator]
+  META --> SQLGEN
+
+  SQLGEN --> VALID[Validate & Guardrails]
+  VALID --> EXEC[Execute SQL]
+
+  EXEC --> RES[Result Set]
+  RES --> SUM[Summarization]
+
+  SUM --> UI[Chatbot Response]
+
+  SQLGEN --> LOG[Execution Log]
+  EXEC --> LOG
